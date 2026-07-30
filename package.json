@@ -15,9 +15,11 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "pinia": "^4.0.2",
     "vue": "^3.5.29"
   },
   "devDependencies": {
+    "@types/chrome": "^0.2.2",
     "@wxt-dev/module-vue": "^1.0.3",
     "typescript": "^5.9.3",
     "vite": "^8.1.5",
