@@ -10,8 +10,13 @@ import {
   createPipelineDemoTransaction,
 } from '@/lib/interceptor/application/interception-pipeline.demo';
 
-import type {InterceptionPipeline,} from '@/lib/interceptor/application/interception-pipeline';
+import type {
+  InterceptionService,
+} from '@/lib/interceptor/application/interception.service';
 
+import type {
+  DebuggerService,
+} from '@/lib/debugger/application/debugger.service';
 
 const rulesStore = useRulesStore();
 
@@ -25,27 +30,56 @@ async function handleCreateRule(): Promise<void> {
 
 const container = getApplicationContainer();
 
-const pipeline =
-    container.resolve<InterceptionPipeline>(
-        TOKENS.interceptionPipeline,
+const interceptionService =
+    container.resolve<InterceptionService>(
+        TOKENS.interceptionService,
+    );
+
+const debuggerService =
+    container.resolve<DebuggerService>(
+        TOKENS.debuggerService,
     );
 
 async function handleTestPipeline(): Promise<void> {
   const transaction =
       createPipelineDemoTransaction();
 
-  const rule =
+  const demoRule =
       createPipelineDemoRule();
 
-  const result = await pipeline.execute(
-      transaction,
-      [rule],
-  );
+  await rulesStore.saveRule(demoRule);
+
+  const result =
+      await interceptionService.intercept(
+          transaction,
+      );
 
   console.info(
-      '[Corsair] Resultado del pipeline',
+      '[Corsair] Resultado de InterceptionService',
       result,
   );
+}
+
+async function handleTestDebugger(): Promise<void> {
+  const session =
+      await debuggerService.attachToTab(999);
+
+  console.info(
+      '[Corsair] Debugger temporal conectado',
+      session,
+  );
+
+  const attached =
+      await debuggerService.isAttachedToTab(999);
+
+  console.info(
+      '[Corsair] Estado del debugger',
+      {
+        attached,
+      },
+  );
+
+  await debuggerService.detachFromTab(999);
 }
 </script>
 
@@ -59,6 +93,13 @@ async function handleTestPipeline(): Promise<void> {
 
         <h1>HTTP Interceptor</h1>
       </div>
+
+      <button
+          type="button"
+          @click="handleTestDebugger"
+      >
+        Probar debugger
+      </button>
 
       <button
           type="button"
