@@ -8,6 +8,8 @@ import type {
     CapturedNetworkExchange,
     CapturedNetworkRequest,
     CapturedNetworkResponse,
+    CapturedResponseBody,
+    FulfillResponseDecision,
     NetworkHeaderEntry,
     NetworkInterceptorSession,
 } from '../domain/network.types';
@@ -100,6 +102,83 @@ export class CdpNetworkGateway
         );
     }
 
+    async failPausedRequest(
+        tabId: number,
+        interceptionId: string,
+    ): Promise<void> {
+        await this.debuggerService.sendCommand(
+            tabId,
+            'Fetch.failRequest',
+            {
+                requestId: interceptionId,
+                errorReason: 'Aborted',
+            },
+        );
+    }
+
+    async readResponseBody(
+        tabId: number,
+        interceptionId: string,
+    ): Promise<CapturedResponseBody> {
+        const result =
+            await this.debuggerService.sendCommand(
+                tabId,
+                'Fetch.getResponseBody',
+                {
+                    requestId: interceptionId,
+                },
+            );
+
+        const body =
+            typeof result.body === 'string'
+                ? result.body
+                : undefined;
+
+        if (!body) {
+            return {
+                body: undefined,
+            };
+        }
+
+        if (result.base64Encoded === true) {
+            return {
+                body: decodeBase64(body),
+            };
+        }
+
+        return {
+            body,
+        };
+    }
+
+    async fulfillPausedResponse(
+        tabId: number,
+        interceptionId: string,
+        decision: FulfillResponseDecision,
+    ): Promise<void> {
+        const payload: Record<string, unknown> = {
+            requestId: interceptionId,
+            responseCode: decision.statusCode,
+            responsePhrase: decision.statusText,
+            responseHeaders: Object.entries(
+                decision.headers,
+            ).map(([name, value]) => ({
+                name,
+                value,
+            })),
+        };
+
+        if (decision.body !== undefined) {
+            payload.body = encodeBase64(decision.body);
+        }
+
+        await this.debuggerService.sendCommand(
+            tabId,
+            'Fetch.fulfillRequest',
+            payload,
+        );
+    }
+
     parseProtocolEvent(
         event: DebuggerProtocolEvent,
     ): CapturedNetworkExchange | null {
@@ -127,7 +206,7 @@ export class CdpNetworkGateway
 
         if (!request) {
             throw new Error(
-                'El evento Fetch.requestPaused no contiene request',
+                'Fetch.requestPaused event is missing request',
             );
         }
 
@@ -347,7 +426,7 @@ function readRequiredString(
         !value
     ) {
         throw new Error(
-            `El campo CDP ${fieldName} es obligatorio`,
+            `CDP field ${fieldName} is required`,
         );
     }
 
@@ -368,4 +447,26 @@ function readOptionalNumber(
     return typeof value === 'number'
         ? value
         : undefined;
+}
+
+function encodeBase64(value: string): string {
+    const bytes = new TextEncoder().encode(value);
+
+    let binary = '';
+
+    for (const byte of bytes) {
+        binary += String.fromCharCode(byte);
+    }
+
+    return btoa(binary);
+}
+
+function decodeBase64(value: string): string {
+    const binary = atob(value);
+    const bytes = Uint8Array.from(
+        binary,
+        (char) => char.charCodeAt(0),
+    );
+
+    return new TextDecoder().decode(bytes);
 }
