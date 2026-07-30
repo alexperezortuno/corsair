@@ -47,7 +47,7 @@ export class ChromeDebuggerGateway
         for (const handler of this.eventHandlers) {
             Promise.resolve(handler(event)).catch((error) => {
                 console.error(
-                    '[Corsair] Error procesando evento CDP',
+                    '[Corsair] Error processing CDP event',
                     error,
                 );
             });
@@ -73,7 +73,7 @@ export class ChromeDebuggerGateway
         for (const handler of this.detachHandlers) {
             Promise.resolve(handler(event)).catch((error) => {
                 console.error(
-                    '[Corsair] Error procesando desconexión CDP',
+                    '[Corsair] Error processing CDP detach',
                     error,
                 );
             });
@@ -100,6 +100,8 @@ export class ChromeDebuggerGateway
             chromeTarget,
             protocolVersion,
         );
+
+        await wait(100);
 
         return {
             target,
@@ -159,12 +161,6 @@ export class ChromeDebuggerGateway
         method: string,
         params: DebuggerCommandParams = {},
     ): Promise<TResult> {
-        if (!await this.isAttached(target)) {
-            throw new Error(
-                `El debugger no está conectado al target ${targetToString(target)}`,
-            );
-        }
-
         const result =
             await chrome.debugger.sendCommand(
                 toChromeTarget(target),
@@ -245,7 +241,7 @@ function toChromeTarget(
     if (target.type === 'tab') {
         if (target.tabId === undefined) {
             throw new Error(
-                'El target de tipo tab requiere tabId',
+                'Tab target requires tabId',
             );
         }
 
@@ -256,7 +252,7 @@ function toChromeTarget(
 
     if (!target.extensionId) {
         throw new Error(
-            'El target de tipo extension requiere extensionId',
+            'Extension target requires extensionId',
         );
     }
 
@@ -308,4 +304,12 @@ function targetToString(
     return `extension:${
         target.extensionId ?? 'unknown'
     }`;
+}
+
+function wait(
+    delayMs: number,
+): Promise<void> {
+    return new Promise((resolve) => {
+        setTimeout(resolve, delayMs);
+    });
 }
