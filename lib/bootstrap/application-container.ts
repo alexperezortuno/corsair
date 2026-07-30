@@ -14,6 +14,12 @@ import {ChromeRuleRepository,} from '@/lib/rules/infrastructure/chrome-rule.repo
 
 import type {RuleRepository,} from '@/lib/rules/domain/rule.repository';
 
+import {InterceptionPipeline,} from '@/lib/interceptor/application/interception-pipeline';
+
+import {RequestRuleStage,} from '@/lib/interceptor/stages/request-rule.stage';
+
+import {ResponseRuleStage,} from '@/lib/interceptor/stages/response-rule.stage';
+
 let applicationContainer: Container | null = null;
 
 export function createApplicationContainer(): Container {
@@ -55,6 +61,26 @@ export function createApplicationContainer(): Container {
             return new RuleService(
                 repository,
                 eventBus,
+                logger,
+            );
+        },
+    );
+
+    container.registerSingleton<InterceptionPipeline>(
+        TOKENS.interceptionPipeline,
+        (currentContainer) => {
+            const logger =
+                currentContainer.resolve<Logger>(
+                    TOKENS.logger,
+                );
+
+            return new InterceptionPipeline(
+                [
+                    new RequestRuleStage(),
+                ],
+                [
+                    new ResponseRuleStage(),
+                ],
                 logger,
             );
         },
