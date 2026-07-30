@@ -1,14 +1,23 @@
-import {computed, ref} from 'vue';
-import {defineStore} from 'pinia';
+import {computed, ref,} from 'vue';
 
-import {RuleService} from '@/lib/rules/application/rule.service';
-import {createDefaultRule} from '@/lib/rules/domain/rule.factory';
-import {ChromeRuleRepository} from '@/lib/rules/infrastructure/chrome-rule.repository';
+import {defineStore,} from 'pinia';
+
+import {getApplicationContainer,} from '@/lib/bootstrap/application-container';
+
+import {TOKENS,} from '@/lib/core/tokens';
+
+import {createDefaultRule,} from '@/lib/rules/domain/rule.factory';
+
+import type {RuleService,} from '@/lib/rules/application/rule.service';
 
 import type {InterceptionRule, RuleId,} from '@/lib/rules/domain/rule.types';
 
-const repository = new ChromeRuleRepository();
-const service = new RuleService(repository);
+const container = getApplicationContainer();
+
+const service =
+    container.resolve<RuleService>(
+        TOKENS.ruleService,
+    );
 
 export const useRulesStore = defineStore('rules', () => {
     const rules = ref<InterceptionRule[]>([]);
