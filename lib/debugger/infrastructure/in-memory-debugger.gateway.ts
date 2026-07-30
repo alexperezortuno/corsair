@@ -80,7 +80,7 @@ export class InMemoryDebuggerGateway
     ): Promise<TResult> {
         if (!await this.isAttached(target)) {
             throw new Error(
-                'El debugger no está conectado al target',
+                'Debugger is not attached to target',
             );
         }
 
