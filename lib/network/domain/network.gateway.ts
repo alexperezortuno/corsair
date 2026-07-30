@@ -1,6 +1,11 @@
 import type {DebuggerProtocolEvent,} from '@/lib/debugger/domain/debugger.types';
 
-import type {CapturedNetworkExchange, NetworkInterceptorSession,} from './network.types';
+import type {
+    CapturedNetworkExchange,
+    CapturedResponseBody,
+    FulfillResponseDecision,
+    NetworkInterceptorSession,
+} from './network.types';
 
 export type NetworkCaptureHandler = (
     exchange: CapturedNetworkExchange,
@@ -20,6 +25,22 @@ export interface NetworkGateway {
     continuePausedRequest(
         tabId: number,
         interceptionId: string,
+    ): Promise<void>;
+
+    failPausedRequest(
+        tabId: number,
+        interceptionId: string,
+    ): Promise<void>;
+
+    readResponseBody(
+        tabId: number,
+        interceptionId: string,
+    ): Promise<CapturedResponseBody>;
+
+    fulfillPausedResponse(
+        tabId: number,
+        interceptionId: string,
+        decision: FulfillResponseDecision,
     ): Promise<void>;
 
     parseProtocolEvent(
