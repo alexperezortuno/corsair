@@ -55,7 +55,7 @@ export class ResponseRuleStage
             };
         }
 
-        logger.debug('Modificación de response aplicada', {
+        logger.debug('Response modification applied', {
             ruleId: rule.id,
             stage: this.name,
             statusCode: result.statusCode,
