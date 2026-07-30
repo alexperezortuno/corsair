@@ -26,11 +26,19 @@ import {InMemoryDebuggerGateway,} from '@/lib/debugger/infrastructure/in-memory-
 
 import {InterceptionService,} from '@/lib/interceptor/application/interception.service';
 
-import type {DebuggerGateway,} from '@/lib/debugger/domain/debugger.gateway';
+import type {
+    DebuggerGateway,
+} from '@/lib/debugger/domain/debugger.gateway';
+
+export interface ApplicationContainerOptions {
+    debuggerGatewayFactory?: () => DebuggerGateway;
+}
 
 let applicationContainer: Container | null = null;
 
-export function createApplicationContainer(): Container {
+export function createApplicationContainer(
+    options: ApplicationContainerOptions = {},
+    ): Container {
     const container = new Container();
 
     container.registerSingleton<Logger>(
@@ -128,7 +136,13 @@ export function createApplicationContainer(): Container {
 
     container.registerSingleton<DebuggerGateway>(
         TOKENS.debuggerGateway,
-        () => new InMemoryDebuggerGateway(),
+        () => {
+            if (options.debuggerGatewayFactory) {
+                return options.debuggerGatewayFactory();
+            }
+
+            return new InMemoryDebuggerGateway();
+        },
     );
 
     container.registerSingleton<DebuggerService>(
