@@ -4,6 +4,11 @@ import type {Logger} from './logger';
 import type {RuleService} from '@/lib/rules/application/rule.service';
 import type {RuleRepository} from '@/lib/rules/domain/rule.repository';
 import type {InterceptionPipeline,} from '@/lib/interceptor/application/interception-pipeline';
+import type {DebuggerService,} from '@/lib/debugger/application/debugger.service';
+
+import type {DebuggerGateway,} from '@/lib/debugger/domain/debugger.gateway';
+
+import type {InterceptionService,} from '@/lib/interceptor/application/interception.service';
 
 export const TOKENS = {
     logger: Symbol(
@@ -34,5 +39,23 @@ export const TOKENS = {
         'corsair.interceptor.pipeline',
     ) as symbol & {
         readonly __type?: InterceptionPipeline;
+    },
+
+    interceptionService: Symbol(
+        'corsair.interceptor.service',
+    ) as symbol & {
+        readonly __type?: InterceptionService;
+    },
+
+    debuggerGateway: Symbol(
+        'corsair.debugger.gateway',
+    ) as symbol & {
+        readonly __type?: DebuggerGateway;
+    },
+
+    debuggerService: Symbol(
+        'corsair.debugger.service',
+    ) as symbol & {
+        readonly __type?: DebuggerService;
     },
 } as const;
