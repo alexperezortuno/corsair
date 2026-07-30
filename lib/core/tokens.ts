@@ -3,6 +3,7 @@ import type {Logger} from './logger';
 
 import type {RuleService} from '@/lib/rules/application/rule.service';
 import type {RuleRepository} from '@/lib/rules/domain/rule.repository';
+import type {InterceptionPipeline,} from '@/lib/interceptor/application/interception-pipeline';
 
 export const TOKENS = {
     logger: Symbol(
@@ -27,5 +28,11 @@ export const TOKENS = {
         'corsair.rules.service',
     ) as symbol & {
         readonly __type?: RuleService;
+    },
+
+    interceptionPipeline: Symbol(
+        'corsair.interceptor.pipeline',
+    ) as symbol & {
+        readonly __type?: InterceptionPipeline;
     },
 } as const;
