@@ -33,7 +33,7 @@ export class InterceptionService {
         );
 
         this.logger.debug(
-            'Interceptación iniciada',
+            'Interception started',
             {
                 transactionId: transaction.id,
                 requestUrl: transaction.request.url,
@@ -62,7 +62,7 @@ export class InterceptionService {
             );
 
             this.logger.info(
-                'Interceptación completada',
+                'Interception completed',
                 {
                     transactionId: transaction.id,
                     matchedRules: result.matchedRules.length,
@@ -90,7 +90,7 @@ export class InterceptionService {
             );
 
             this.logger.error(
-                'Falló la interceptación',
+                'Interception failed',
                 error,
                 {
                     transactionId: transaction.id,
