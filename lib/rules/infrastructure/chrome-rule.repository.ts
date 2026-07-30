@@ -35,15 +35,10 @@ export class ChromeRuleRepository implements RuleRepository {
             (existingRule) => existingRule.id === rule.id,
         );
 
-        const updatedRule: InterceptionRule = {
-            ...rule,
-            updatedAt: new Date().toISOString(),
-        };
-
         if (index === -1) {
-            rules.push(updatedRule);
+            rules.push(rule);
         } else {
-            rules[index] = updatedRule;
+            rules[index] = rule;
         }
 
         await this.saveAll(rules);
