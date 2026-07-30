@@ -13,6 +13,14 @@ import type {EventBus,} from '@/lib/core/event-bus';
 
 import type {Logger,} from '@/lib/core/logger';
 
+import {
+    DEBUGGER_EVENTS,
+} from '@/lib/debugger/domain/debugger.events';
+
+import {
+    INTERCEPTION_EVENTS,
+} from '@/lib/interceptor/domain/interception.events';
+
 const container = getApplicationContainer();
 
 const eventBus =
@@ -42,6 +50,55 @@ eventBus.subscribe(
     (event) => {
         logger.debug(
             'Evento rules.updated recibido',
+            {
+                event,
+            },
+        );
+    },
+);
+
+eventBus.subscribe(
+    INTERCEPTION_EVENTS.completed,
+    (event) => {
+        logger.debug(
+            'Interceptación completada recibida',
+            {
+                event,
+            },
+        );
+    },
+);
+
+eventBus.subscribe(
+    INTERCEPTION_EVENTS.failed,
+    (event) => {
+        logger.error(
+            'Interceptación fallida recibida',
+            undefined,
+            {
+                event,
+            },
+        );
+    },
+);
+
+eventBus.subscribe(
+    DEBUGGER_EVENTS.attached,
+    (event) => {
+        logger.debug(
+            'Debugger attached recibido',
+            {
+                event,
+            },
+        );
+    },
+);
+
+eventBus.subscribe(
+    DEBUGGER_EVENTS.detached,
+    (event) => {
+        logger.debug(
+            'Debugger detached recibido',
             {
                 event,
             },
