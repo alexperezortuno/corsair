@@ -220,9 +220,15 @@ export function createApplicationContainer(
                         TOKENS.logger,
                     );
 
+                const interceptionService =
+                    currentContainer.resolve<InterceptionService>(
+                        TOKENS.interceptionService,
+                    );
+
                 const service =
                     new NetworkInterceptorService(
                         gateway,
+                        interceptionService,
                         eventBus,
                         logger,
                     );
