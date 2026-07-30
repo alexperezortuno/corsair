@@ -57,3 +57,14 @@ export interface NetworkInterceptorSession {
     tabId: number;
     enabledAt: string;
 }
+
+export interface CapturedResponseBody {
+    body?: string;
+}
+
+export interface FulfillResponseDecision {
+    statusCode: number;
+    statusText?: string;
+    headers: Record<string, string>;
+    body?: string;
+}
