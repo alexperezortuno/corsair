@@ -18,11 +18,33 @@ import {DEBUGGER_MESSAGE_TYPES, isDebuggerRuntimeMessage,} from '@/lib/debugger/
 
 import type {Logger,} from '@/lib/core/logger';
 
+import {
+    NetworkInterceptorService,
+} from '@/lib/network/application/network-interceptor.service';
+
+import {
+    NETWORK_EVENTS,
+} from '@/lib/network/domain/network.events';
+
+import type {
+    EventBus,
+} from '@/lib/core/event-bus';
+
+import {
+    DEBUGGER_EVENTS,
+} from '@/lib/debugger/domain/debugger.events';
+
+import type {
+    DebuggerDetachedPayload,
+} from '@/lib/debugger/domain/debugger.events';
+
 export default defineBackground(() => {
     const container =
         createApplicationContainer({
             debuggerGatewayFactory: () =>
                 new ChromeDebuggerGateway(),
+
+            enableNetworkInterceptor: true,
         });
 
     const debuggerService =
@@ -34,6 +56,63 @@ export default defineBackground(() => {
         container.resolve<Logger>(
             TOKENS.logger,
         );
+
+    const networkInterceptorService =
+        container.resolve<
+            NetworkInterceptorService
+        >(
+            TOKENS.networkInterceptorService,
+        );
+
+    const eventBus =
+        container.resolve<EventBus>(
+            TOKENS.eventBus,
+        );
+
+    eventBus.subscribe(
+        NETWORK_EVENTS.requestCaptured,
+        (event) => {
+            logger.debug(
+                'Evento request capturado',
+                {
+                    event,
+                },
+            );
+        },
+    );
+
+    eventBus.subscribe(
+        NETWORK_EVENTS.responseCaptured,
+        (event) => {
+            logger.debug(
+                'Evento response capturado',
+                {
+                    event,
+                },
+            );
+        },
+    );
+
+    eventBus.subscribe<
+        DebuggerDetachedPayload
+    >(
+        DEBUGGER_EVENTS.detached,
+        ({ payload }) => {
+            const target =
+                payload.event.target;
+
+            if (
+                target.type !== 'tab' ||
+                target.tabId === undefined
+            ) {
+                return;
+            }
+
+            networkInterceptorService.forgetTab(
+                target.tabId,
+            );
+        },
+    );
 
     logger.info(
         'Background service worker iniciado',
@@ -84,6 +163,7 @@ export default defineBackground(() => {
             void handleDebuggerMessage(
                 message,
                 debuggerService,
+                networkInterceptorService,
                 logger,
                 sender,
             ).then(sendResponse);
@@ -91,11 +171,37 @@ export default defineBackground(() => {
             return true;
         },
     );
+
+    eventBus.subscribe(
+        NETWORK_EVENTS.requestCaptured,
+        (event) => {
+            logger.debug(
+                'Evento request capturado',
+                {
+                    event,
+                },
+            );
+        },
+    );
+
+    eventBus.subscribe(
+        NETWORK_EVENTS.responseCaptured,
+        (event) => {
+            logger.debug(
+                'Evento response capturado',
+                {
+                    event,
+                },
+            );
+        },
+    );
 });
 
 async function handleDebuggerMessage(
     message: DebuggerRuntimeMessage,
     debuggerService: DebuggerService,
+    networkInterceptorService:
+    NetworkInterceptorService,
     logger: Logger,
     sender: chrome.runtime.MessageSender,
 ): Promise<RuntimeResponse<unknown>> {
@@ -114,7 +220,12 @@ async function handleDebuggerMessage(
         switch (message.type) {
             case DEBUGGER_MESSAGE_TYPES.attach: {
                 const session =
-                    await debuggerService.attachToTab(tabId);
+                    await debuggerService.attachToTab(
+                        tabId,
+                    );
+
+                await networkInterceptorService
+                    .enableForTab(tabId);
 
                 const data: DebuggerAttachResult = {
                     session,
@@ -124,6 +235,14 @@ async function handleDebuggerMessage(
             }
 
             case DEBUGGER_MESSAGE_TYPES.detach: {
+                if (
+                    networkInterceptorService
+                        .isEnabledForTab(tabId)
+                ) {
+                    await networkInterceptorService
+                        .disableForTab(tabId);
+                }
+
                 await debuggerService.detachFromTab(
                     tabId,
                 );
