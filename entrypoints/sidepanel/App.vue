@@ -3,19 +3,16 @@ import {computed, onMounted, reactive, ref,} from 'vue';
 
 import {useRulesStore,} from '@/stores/rules.store';
 
-import {
-    createDefaultMatchCondition,
-    createDefaultRule,
-} from '@/lib/rules/domain/rule.factory';
+import {createDefaultMatchCondition, createDefaultRule,} from '@/lib/rules/domain/rule.factory';
 
 import {DebuggerRuntimeClient,} from '@/lib/debugger/runtime/debugger.client';
 
 import type {
-    BodyModification,
-    BodyModificationMode,
-    HeaderModification,
-    InterceptionRule,
-    MatchType,
+  BodyModification,
+  BodyModificationMode,
+  HeaderModification,
+  InterceptionRule,
+  MatchType,
 } from '@/lib/rules/domain/rule.types';
 
 type TargetField =
@@ -23,26 +20,26 @@ type TargetField =
     | 'domain';
 
 interface RuleFormState {
-    id: string | null;
-    name: string;
-    priority: string;
-    targetField: TargetField;
-    matchType: MatchType;
-    pattern: string;
-    caseSensitive: boolean;
-    statusCode: string;
-    statusText: string;
-    responseHeaders: string;
-    bodyMode: BodyModificationMode;
-    bodyStaticValue: string;
-    bodySearch: string;
-    bodyReplacement: string;
+  id: string | null;
+  name: string;
+  priority: string;
+  targetField: TargetField;
+  matchType: MatchType;
+  pattern: string;
+  caseSensitive: boolean;
+  statusCode: string;
+  statusText: string;
+  responseHeaders: string;
+  bodyMode: BodyModificationMode;
+  bodyStaticValue: string;
+  bodySearch: string;
+  bodyReplacement: string;
 }
 
 interface LogEntry {
-    id: string;
-    time: string;
-    message: string;
+  id: string;
+  time: string;
+  message: string;
 }
 
 const rulesStore = useRulesStore();
@@ -57,6 +54,7 @@ const logs = ref<LogEntry[]>([]);
 const showNewRule = ref(true);
 const showSavedRules = ref(true);
 const showActivityLog = ref(true);
+const version = ref<string | null>(null);
 
 const form = reactive<RuleFormState>(
     createDefaultFormState(),
@@ -76,18 +74,18 @@ const canSubmit = computed(() =>
 );
 
 const matchTypeOptions: MatchType[] = [
-    'contains',
-    'exact',
-    'wildcard',
-    'regex',
+  'contains',
+  'exact',
+  'wildcard',
+  'regex',
 ];
 
 const bodyModeOptions: BodyModificationMode[] = [
-    'none',
-    'static',
-    'text-replace',
-    'regex-replace',
-    'full-replacement',
+  'none',
+  'static',
+  'text-replace',
+  'regex-replace',
+  'full-replacement',
 ];
 
 const debuggerClient =
@@ -98,639 +96,644 @@ let serviceWorkerPort:
     | null = null;
 
 onMounted(async () => {
-    openServiceWorkerPort();
+  getVersion();
+  openServiceWorkerPort();
 
-    await rulesStore.loadRules();
-    await autoAttachDebugger();
+  await rulesStore.loadRules();
+  await autoAttachDebugger();
 
-    chrome.runtime.onMessage.addListener(
-        handleRuntimeMessage,
-    );
+  chrome.runtime.onMessage.addListener(
+      handleRuntimeMessage,
+  );
 });
 
 function openServiceWorkerPort(): void {
-    try {
-        serviceWorkerPort =
-            chrome.runtime.connect({
-                name: 'corsair.sidepanel',
-            });
+  try {
+    serviceWorkerPort =
+        chrome.runtime.connect({
+          name: 'corsair.sidepanel',
+        });
 
-        serviceWorkerPort.onDisconnect.addListener(
-            () => {
-                serviceWorkerPort = null;
-                addLog(
-                    'Service worker port disconnected',
-                );
-            },
-        );
+    serviceWorkerPort.onDisconnect.addListener(
+        () => {
+          serviceWorkerPort = null;
+          addLog(
+              'Service worker port disconnected',
+          );
+        },
+    );
 
-        addLog(
-            'Service worker port opened',
-        );
-    } catch (cause) {
-        const error =
-            cause instanceof Error
-                ? cause.message
-                : String(cause);
+    addLog(
+        'Service worker port opened',
+    );
+  } catch (cause) {
+    const error =
+        cause instanceof Error
+            ? cause.message
+            : String(cause);
 
-        addLog(
-            `Failed to open service worker port: ${error}`,
-        );
-    }
+    addLog(
+        `Failed to open service worker port: ${error}`,
+    );
+  }
 }
 
 async function autoAttachDebugger(): Promise<void> {
-    if (attaching.value || isAttached.value) {
-        return;
+  if (attaching.value || isAttached.value) {
+    return;
+  }
+
+  attaching.value = true;
+  attachError.value = null;
+
+  try {
+    const [activeTab] =
+        await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+
+    addLog(
+        `Active tab: ${activeTab?.id ?? 'unknown'} (${activeTab?.url ?? 'no url'})`,
+    );
+
+    if (!activeTab?.id) {
+      attachError.value =
+          'No active tab found';
+      addLog(attachError.value);
+      return;
     }
 
-    attaching.value = true;
+    const validation =
+        validateTabForDebugger(activeTab);
+
+    if (!validation.valid) {
+      attachError.value = validation.reason;
+      addLog(
+          `${attachError.value}: ${activeTab.url}`,
+      );
+      return;
+    }
+
+    addLog(
+        `Attaching debugger to tab ${activeTab.id}...`,
+    );
+
+    await debuggerClient.attachToTab(
+        activeTab.id,
+    );
+
+    attachedTabId.value = activeTab.id;
     attachError.value = null;
+    addLog(
+        `Debugger attached to tab ${activeTab.id}`,
+    );
+  } catch (cause) {
+    const error =
+        cause instanceof Error
+            ? cause.message
+            : String(cause);
 
-    try {
-        const [activeTab] =
-            await chrome.tabs.query({
-                active: true,
-                currentWindow: true,
-            });
-
-        addLog(
-            `Active tab: ${activeTab?.id ?? 'unknown'} (${activeTab?.url ?? 'no url'})`,
-        );
-
-        if (!activeTab?.id) {
-            attachError.value =
-                'No active tab found';
-            addLog(attachError.value);
-            return;
-        }
-
-        const validation =
-            validateTabForDebugger(activeTab);
-
-        if (!validation.valid) {
-            attachError.value = validation.reason;
-            addLog(
-                `${attachError.value}: ${activeTab.url}`,
-            );
-            return;
-        }
-
-        addLog(
-            `Attaching debugger to tab ${activeTab.id}...`,
-        );
-
-        await debuggerClient.attachToTab(
-            activeTab.id,
-        );
-
-        attachedTabId.value = activeTab.id;
-        attachError.value = null;
-        addLog(
-            `Debugger attached to tab ${activeTab.id}`,
-        );
-    } catch (cause) {
-        const error =
-            cause instanceof Error
-                ? cause.message
-                : String(cause);
-
-        attachError.value = formatAttachError(error);
-        addLog(`Attach failed: ${error}`);
-    } finally {
-        attaching.value = false;
-    }
+    attachError.value = formatAttachError(error);
+    addLog(`Attach failed: ${error}`);
+  } finally {
+    attaching.value = false;
+  }
 }
 
 async function runDiagnostics(): Promise<void> {
-    if (attaching.value) {
-        return;
+  if (attaching.value) {
+    return;
+  }
+
+  attaching.value = true;
+  attachError.value = null;
+
+  try {
+    const [activeTab] =
+        await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+
+    if (!activeTab?.id) {
+      addLog('Diagnostics: no active tab');
+      return;
     }
 
-    attaching.value = true;
-    attachError.value = null;
+    const validation =
+        validateTabForDebugger(activeTab);
 
-    try {
-        const [activeTab] =
-            await chrome.tabs.query({
-                active: true,
-                currentWindow: true,
-            });
+    if (!validation.valid) {
+      addLog(
+          `Diagnostics: ${validation.reason}`,
+      );
+      return;
+    }
 
-        if (!activeTab?.id) {
-            addLog('Diagnostics: no active tab');
-            return;
-        }
+    addLog(
+        `Diagnostics: attaching to tab ${activeTab.id}...`,
+    );
 
-        const validation =
-            validateTabForDebugger(activeTab);
+    await debuggerClient.attachToTab(
+        activeTab.id,
+    );
 
-        if (!validation.valid) {
-            addLog(
-                `Diagnostics: ${validation.reason}`,
-            );
-            return;
-        }
+    addLog(
+        'Diagnostics: attach succeeded',
+    );
 
-        addLog(
-            `Diagnostics: attaching to tab ${activeTab.id}...`,
-        );
-
-        await debuggerClient.attachToTab(
+    const attached =
+        await debuggerClient.isAttachedToTab(
             activeTab.id,
         );
 
-        addLog(
-            'Diagnostics: attach succeeded',
-        );
+    addLog(
+        `Diagnostics: isAttached=${attached}`,
+    );
 
-        const attached =
-            await debuggerClient.isAttachedToTab(
-                activeTab.id,
-            );
+    await debuggerClient.detachFromTab(
+        activeTab.id,
+    );
 
-        addLog(
-            `Diagnostics: isAttached=${attached}`,
-        );
+    addLog('Diagnostics: detached');
+  } catch (cause) {
+    const error =
+        cause instanceof Error
+            ? cause.message
+            : String(cause);
 
-        await debuggerClient.detachFromTab(
-            activeTab.id,
-        );
-
-        addLog('Diagnostics: detached');
-    } catch (cause) {
-        const error =
-            cause instanceof Error
-                ? cause.message
-                : String(cause);
-
-        addLog(`Diagnostics failed: ${error}`);
-    } finally {
-        attaching.value = false;
-    }
+    addLog(`Diagnostics failed: ${error}`);
+  } finally {
+    attaching.value = false;
+  }
 }
 
 function validateTabForDebugger(
     tab: chrome.tabs.Tab,
 ): { valid: true } | { valid: false; reason: string } {
-    const url = tab.url ?? '';
+  const url = tab.url ?? '';
 
-    const unsupportedPrefixes = [
-        'chrome://',
-        'chrome-extension://',
-        'devtools://',
-        'about:',
-        'edge://',
-        'file://',
-        'view-source:',
-    ];
+  const unsupportedPrefixes = [
+    'chrome://',
+    'chrome-extension://',
+    'devtools://',
+    'about:',
+    'edge://',
+    'file://',
+    'view-source:',
+  ];
 
-    for (const prefix of unsupportedPrefixes) {
-        if (url.startsWith(prefix)) {
-            return {
-                valid: false,
-                reason: `Cannot attach to ${prefix} pages`,
-            };
-        }
+  for (const prefix of unsupportedPrefixes) {
+    if (url.startsWith(prefix)) {
+      return {
+        valid: false,
+        reason: `Cannot attach to ${prefix} pages`,
+      };
     }
+  }
 
-    if (!url) {
-        return {
-            valid: false,
-            reason: 'Tab has no URL yet',
-        };
-    }
+  if (!url) {
+    return {
+      valid: false,
+      reason: 'Tab has no URL yet',
+    };
+  }
 
-    return { valid: true };
+  return {valid: true};
 }
 
 function formatAttachError(error: string): string {
-    if (
-        error.includes(
-            'Debugger is not attached',
-        )
-    ) {
-        return 'Attach failed: Chrome lost the debugger session. Close DevTools, reload the page, and try again.';
-    }
+  if (
+      error.includes(
+          'Debugger is not attached',
+      )
+  ) {
+    return 'Attach failed: Chrome lost the debugger session. Close DevTools, reload the page, and try again.';
+  }
 
-    if (
-        error.includes(
-            'Cannot access a chrome',
-        )
-    ) {
-        return 'Attach failed: cannot debug internal Chrome pages.';
-    }
+  if (
+      error.includes(
+          'Cannot access a chrome',
+      )
+  ) {
+    return 'Attach failed: cannot debug internal Chrome pages.';
+  }
 
-    if (
-        error.includes(
-            'Another debugger',
-        )
-    ) {
-        return 'Attach failed: another debugger (DevTools) is already attached to this tab.';
-    }
+  if (
+      error.includes(
+          'Another debugger',
+      )
+  ) {
+    return 'Attach failed: another debugger (DevTools) is already attached to this tab.';
+  }
 
-    return `Attach failed: ${error}`;
+  return `Attach failed: ${error}`;
 }
 
 async function detachDebugger(): Promise<void> {
-    if (!attachedTabId.value) {
-        return;
-    }
+  if (!attachedTabId.value) {
+    return;
+  }
 
-    try {
-        await debuggerClient.detachFromTab(
-            attachedTabId.value,
-        );
+  try {
+    await debuggerClient.detachFromTab(
+        attachedTabId.value,
+    );
 
-        addLog(
-            `Debugger detached from tab ${attachedTabId.value}`,
-        );
-    } catch (cause) {
-        const error =
-            cause instanceof Error
-                ? cause.message
-                : String(cause);
+    addLog(
+        `Debugger detached from tab ${attachedTabId.value}`,
+    );
+  } catch (cause) {
+    const error =
+        cause instanceof Error
+            ? cause.message
+            : String(cause);
 
-        addLog(`Detach failed: ${error}`);
-    } finally {
-        attachedTabId.value = null;
-    }
+    addLog(`Detach failed: ${error}`);
+  } finally {
+    attachedTabId.value = null;
+  }
 }
 
 async function handleSaveRule(): Promise<void> {
-    if (!canSubmit.value || savingRule.value) {
-        return;
-    }
+  if (!canSubmit.value || savingRule.value) {
+    return;
+  }
 
-    savingRule.value = true;
+  savingRule.value = true;
 
-    try {
-        const statusCode =
-            parseStatusCode(form.statusCode);
+  try {
+    const statusCode =
+        parseStatusCode(form.statusCode);
 
-        const baseRule = isEditing.value
-            ? (rulesStore.rules.find(
-                (rule) => rule.id === form.id,
-            ) ?? createDefaultRule())
-            : createDefaultRule();
+    const baseRule = isEditing.value
+        ? (rulesStore.rules.find(
+            (rule) => rule.id === form.id,
+        ) ?? createDefaultRule())
+        : createDefaultRule();
 
-        const condition = {
-            type: form.matchType,
-            pattern: form.pattern.trim(),
-            caseSensitive: form.caseSensitive,
-        };
+    const condition = {
+      type: form.matchType,
+      pattern: form.pattern.trim(),
+      caseSensitive: form.caseSensitive,
+    };
 
-        const rule: InterceptionRule = {
-            ...baseRule,
+    const rule: InterceptionRule = {
+      ...baseRule,
 
-            name: form.name.trim(),
-            priority: Number(form.priority) || 0,
+      name: form.name.trim(),
+      priority: Number(form.priority) || 0,
 
-            target: {
-                ...baseRule.target,
-                url:
-                    form.targetField === 'url'
-                        ? condition
-                        : undefined,
-                domain:
-                    form.targetField === 'domain'
-                        ? condition
-                        : undefined,
-                path: undefined,
-            },
+      target: {
+        ...baseRule.target,
+        url:
+            form.targetField === 'url'
+                ? condition
+                : undefined,
+        domain:
+            form.targetField === 'domain'
+                ? condition
+                : undefined,
+        path: undefined,
+      },
 
-            request: {
-                ...baseRule.request,
-                enabled: false,
-            },
+      request: {
+        ...baseRule.request,
+        enabled: false,
+      },
 
-            response: {
-                ...baseRule.response,
-                enabled: true,
-                statusCode,
-                statusText:
-                    form.statusText.trim() || undefined,
-                headers:
-                    parseHeaders(
-                        form.responseHeaders,
-                    ),
-                body:
-                    buildBodyModification(form),
-            },
-        };
+      response: {
+        ...baseRule.response,
+        enabled: true,
+        statusCode,
+        statusText:
+            form.statusText.trim() || undefined,
+        headers:
+            parseHeaders(
+                form.responseHeaders,
+            ),
+        body:
+            buildBodyModification(form),
+      },
+    };
 
-        await rulesStore.saveRule(rule);
-        addLog(
-            isEditing.value
-                ? `Rule updated: ${rule.name}`
-                : `Rule created: ${rule.name}`,
-        );
-        resetForm();
-    } finally {
-        savingRule.value = false;
-    }
+    await rulesStore.saveRule(rule);
+    addLog(
+        isEditing.value
+            ? `Rule updated: ${rule.name}`
+            : `Rule created: ${rule.name}`,
+    );
+    resetForm();
+  } finally {
+    savingRule.value = false;
+  }
 }
 
 function startEditRule(
     rule: InterceptionRule,
 ): void {
-    const targetField = rule.target.url
-        ? 'url'
-        : 'domain';
+  const targetField = rule.target.url
+      ? 'url'
+      : 'domain';
 
-    const condition =
-        rule.target.url ??
-        rule.target.domain ??
-        createDefaultMatchCondition();
+  const condition =
+      rule.target.url ??
+      rule.target.domain ??
+      createDefaultMatchCondition();
 
-    const body = rule.response.body;
+  const body = rule.response.body;
 
-    form.id = rule.id;
-    form.name = rule.name;
-    form.priority = String(rule.priority);
-    form.targetField = targetField;
-    form.matchType = condition.type;
-    form.pattern = condition.pattern;
-    form.caseSensitive = condition.caseSensitive;
-    form.statusCode =
-        rule.response.statusCode?.toString() ?? '';
-    form.statusText = rule.response.statusText ?? '';
-    form.responseHeaders =
-        formatHeaders(rule.response.headers);
-    form.bodyMode = body?.mode ?? 'none';
-    form.bodyStaticValue =
-        body?.mode === 'static'
-            ? body.staticValue ?? ''
-            : '';
-    form.bodySearch =
-        body?.mode === 'text-replace' ||
-        body?.mode === 'regex-replace'
-            ? body.search ?? ''
-            : '';
-    form.bodyReplacement =
-        body?.mode === 'text-replace' ||
-        body?.mode === 'regex-replace' ||
-        body?.mode === 'full-replacement'
-            ? body.replacement ?? ''
-            : '';
+  form.id = rule.id;
+  form.name = rule.name;
+  form.priority = String(rule.priority);
+  form.targetField = targetField;
+  form.matchType = condition.type;
+  form.pattern = condition.pattern;
+  form.caseSensitive = condition.caseSensitive;
+  form.statusCode =
+      rule.response.statusCode?.toString() ?? '';
+  form.statusText = rule.response.statusText ?? '';
+  form.responseHeaders =
+      formatHeaders(rule.response.headers);
+  form.bodyMode = body?.mode ?? 'none';
+  form.bodyStaticValue =
+      body?.mode === 'static'
+          ? body.staticValue ?? ''
+          : '';
+  form.bodySearch =
+      body?.mode === 'text-replace' ||
+      body?.mode === 'regex-replace'
+          ? body.search ?? ''
+          : '';
+  form.bodyReplacement =
+      body?.mode === 'text-replace' ||
+      body?.mode === 'regex-replace' ||
+      body?.mode === 'full-replacement'
+          ? body.replacement ?? ''
+          : '';
 
-    window.scrollTo({
-        top: 0,
-        behavior: 'smooth',
-    });
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth',
+  });
 }
 
 async function handleToggleRule(
     rule: InterceptionRule,
 ): Promise<void> {
-    await rulesStore.toggleRule(
-        rule.id,
-        !rule.enabled,
-    );
+  await rulesStore.toggleRule(
+      rule.id,
+      !rule.enabled,
+  );
 
-    addLog(
-        `${rule.enabled ? 'Disabled' : 'Enabled'} rule: ${rule.name}`,
-    );
+  addLog(
+      `${rule.enabled ? 'Disabled' : 'Enabled'} rule: ${rule.name}`,
+  );
 }
 
 async function handleDeleteRule(
     ruleId: string,
 ): Promise<void> {
-    const rule = rulesStore.rules.find(
-        (candidate) => candidate.id === ruleId,
-    );
+  const rule = rulesStore.rules.find(
+      (candidate) => candidate.id === ruleId,
+  );
 
-    await rulesStore.deleteRule(ruleId);
+  await rulesStore.deleteRule(ruleId);
 
-    addLog(
-        `Deleted rule: ${rule?.name ?? ruleId}`,
-    );
+  addLog(
+      `Deleted rule: ${rule?.name ?? ruleId}`,
+  );
 
-    if (form.id === ruleId) {
-        resetForm();
-    }
+  if (form.id === ruleId) {
+    resetForm();
+  }
 }
 
 function resetForm(): void {
-    Object.assign(form, createDefaultFormState());
+  Object.assign(form, createDefaultFormState());
 }
 
 function parseStatusCode(
     value: string,
 ): number | undefined {
-    const normalizedValue = value.trim();
+  const normalizedValue = value.trim();
 
-    if (!normalizedValue) {
-        return undefined;
-    }
+  if (!normalizedValue) {
+    return undefined;
+  }
 
-    const statusCode = Number(normalizedValue);
+  const statusCode = Number(normalizedValue);
 
-    if (!Number.isInteger(statusCode)) {
-        throw new Error(
-            'Status code must be an integer',
-        );
-    }
+  if (!Number.isInteger(statusCode)) {
+    throw new Error(
+        'Status code must be an integer',
+    );
+  }
 
-    return statusCode;
+  return statusCode;
 }
 
 function parseHeaders(
     input: string,
 ): HeaderModification[] {
-    const lines = input
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean);
+  const lines = input
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
 
-    const headers: HeaderModification[] = [];
+  const headers: HeaderModification[] = [];
 
-    for (const line of lines) {
-        const separator = line.indexOf(':');
+  for (const line of lines) {
+    const separator = line.indexOf(':');
 
-        if (separator === -1) {
-            continue;
-        }
-
-        const name = line
-            .slice(0, separator)
-            .trim();
-
-        const value = line
-            .slice(separator + 1)
-            .trim();
-
-        if (!name) {
-            continue;
-        }
-
-        headers.push({
-            operation: 'set' as const,
-            name,
-            value,
-        });
+    if (separator === -1) {
+      continue;
     }
 
-    return headers;
+    const name = line
+        .slice(0, separator)
+        .trim();
+
+    const value = line
+        .slice(separator + 1)
+        .trim();
+
+    if (!name) {
+      continue;
+    }
+
+    headers.push({
+      operation: 'set' as const,
+      name,
+      value,
+    });
+  }
+
+  return headers;
 }
 
 function formatHeaders(
     headers: HeaderModification[],
 ): string {
-    return headers
-        .map((header) =>
-            `${header.name}: ${header.value ?? ''}`,
-        )
-        .join('\n');
+  return headers
+      .map((header) =>
+          `${header.name}: ${header.value ?? ''}`,
+      )
+      .join('\n');
 }
 
 function buildBodyModification(
     state: RuleFormState,
 ): BodyModification {
-    switch (state.bodyMode) {
-        case 'none':
-            return {
-                mode: 'none',
-            };
+  switch (state.bodyMode) {
+    case 'none':
+      return {
+        mode: 'none',
+      };
 
-        case 'static':
-            return {
-                mode: 'static',
-                staticValue: state.bodyStaticValue,
-            };
+    case 'static':
+      return {
+        mode: 'static',
+        staticValue: state.bodyStaticValue,
+      };
 
-        case 'full-replacement':
-            return {
-                mode: 'full-replacement',
-                replacement:
-                    state.bodyReplacement,
-            };
+    case 'full-replacement':
+      return {
+        mode: 'full-replacement',
+        replacement:
+        state.bodyReplacement,
+      };
 
-        case 'text-replace':
-            return {
-                mode: 'text-replace',
-                search: state.bodySearch,
-                replacement:
-                    state.bodyReplacement,
-            };
+    case 'text-replace':
+      return {
+        mode: 'text-replace',
+        search: state.bodySearch,
+        replacement:
+        state.bodyReplacement,
+      };
 
-        case 'regex-replace':
-            return {
-                mode: 'regex-replace',
-                search: state.bodySearch,
-                replacement:
-                    state.bodyReplacement,
-            };
-    }
+    case 'regex-replace':
+      return {
+        mode: 'regex-replace',
+        search: state.bodySearch,
+        replacement:
+        state.bodyReplacement,
+      };
+  }
 }
 
 function targetSummary(
     rule: InterceptionRule,
 ): string {
-    const urlCondition = rule.target.url;
+  const urlCondition = rule.target.url;
 
-    if (urlCondition?.pattern.trim()) {
-        return `URL (${urlCondition.type}): ${urlCondition.pattern}`;
-    }
+  if (urlCondition?.pattern.trim()) {
+    return `URL (${urlCondition.type}): ${urlCondition.pattern}`;
+  }
 
-    const domainCondition = rule.target.domain;
+  const domainCondition = rule.target.domain;
 
-    if (domainCondition?.pattern.trim()) {
-        return `Domain (${domainCondition.type}): ${domainCondition.pattern}`;
-    }
+  if (domainCondition?.pattern.trim()) {
+    return `Domain (${domainCondition.type}): ${domainCondition.pattern}`;
+  }
 
-    return 'No target';
+  return 'No target';
 }
 
 function addLog(message: string): void {
-    const entry: LogEntry = {
-        id: crypto.randomUUID(),
-        time: new Date().toLocaleTimeString(),
-        message,
-    };
+  const entry: LogEntry = {
+    id: crypto.randomUUID(),
+    time: new Date().toLocaleTimeString(),
+    message,
+  };
 
-    logs.value.unshift(entry);
+  logs.value.unshift(entry);
 
-    if (logs.value.length > 50) {
-        logs.value.pop();
-    }
+  if (logs.value.length > 50) {
+    logs.value.pop();
+  }
 }
 
 function clearLogs(): void {
-    logs.value = [];
+  logs.value = [];
 }
 
 function toggleNewRule(): void {
-    showNewRule.value = !showNewRule.value;
+  showNewRule.value = !showNewRule.value;
 }
 
 function toggleSavedRules(): void {
-    showSavedRules.value = !showSavedRules.value;
+  showSavedRules.value = !showSavedRules.value;
 }
 
 function toggleActivityLog(): void {
-    showActivityLog.value = !showActivityLog.value;
+  showActivityLog.value = !showActivityLog.value;
 }
 
 function handleRuntimeMessage(
     message: unknown,
 ): void {
-    if (!isNetworkLogMessage(message)) {
-        return;
-    }
+  if (!isNetworkLogMessage(message)) {
+    return;
+  }
 
-    const payload = message.payload;
+  const payload = message.payload;
 
-    if (payload.type === 'responseModified') {
-        addLog(
-            `Modified ${payload.url} → ${payload.statusCode} (${payload.matchedRules} rule(s))`,
-        );
-    }
+  if (payload.type === 'responseModified') {
+    addLog(
+        `Modified ${payload.url} → ${payload.statusCode} (${payload.matchedRules} rule(s))`,
+    );
+  }
 
-    if (payload.type === 'responseAborted') {
-        addLog(
-            `Aborted ${payload.url} (${payload.matchedRules} rule(s))`,
-        );
-    }
+  if (payload.type === 'responseAborted') {
+    addLog(
+        `Aborted ${payload.url} (${payload.matchedRules} rule(s))`,
+    );
+  }
 }
 
 function isNetworkLogMessage(
     message: unknown,
 ): message is {
+  type: string;
+  payload: {
     type: string;
-    payload: {
-        type: string;
-        url: string;
-        statusCode: number;
-        matchedRules: number;
-    };
+    url: string;
+    statusCode: number;
+    matchedRules: number;
+  };
 } {
-    return (
-        typeof message === 'object' &&
-        message !== null &&
-        'type' in message &&
-        (message as Record<string, unknown>).type ===
-            'network.log'
-    );
+  return (
+      typeof message === 'object' &&
+      message !== null &&
+      'type' in message &&
+      (message as Record<string, unknown>).type ===
+      'network.log'
+  );
 }
 
 function createDefaultFormState(): RuleFormState {
-    return {
-        id: null,
-        name: 'Modify response',
-        priority: '100',
-        targetField: 'url',
-        matchType: 'contains',
-        pattern: '',
-        caseSensitive: false,
-        statusCode: '',
-        statusText: '',
-        responseHeaders: '',
-        bodyMode: 'none',
-        bodyStaticValue: '',
-        bodySearch: '',
-        bodyReplacement: '',
-    };
+  return {
+    id: null,
+    name: 'Modify response',
+    priority: '100',
+    targetField: 'url',
+    matchType: 'contains',
+    pattern: '',
+    caseSensitive: false,
+    statusCode: '',
+    statusText: '',
+    responseHeaders: '',
+    bodyMode: 'none',
+    bodyStaticValue: '',
+    bodySearch: '',
+    bodyReplacement: '',
+  };
+}
+
+function getVersion(): void {
+  version.value = chrome.runtime.getManifest().version;
 }
 </script>
 
@@ -826,173 +829,173 @@ function createDefaultFormState(): RuleFormState {
           class="panel-content"
       >
         <form @submit.prevent="handleSaveRule">
-        <label>
-          Name
+          <label>
+            Name
 
-          <input
-              v-model="form.name"
-              type="text"
-              required
-          >
-        </label>
-
-        <label>
-          Priority
-
-          <input
-              v-model="form.priority"
-              type="number"
-              min="0"
-              step="1"
-          >
-        </label>
-
-        <label>
-          Intercept by
-
-          <select v-model="form.targetField">
-            <option value="url">URL</option>
-
-            <option value="domain">Domain</option>
-          </select>
-        </label>
-
-        <label>
-          Match type
-
-          <select v-model="form.matchType">
-            <option
-                v-for="option in matchTypeOptions"
-                :key="option"
-                :value="option"
+            <input
+                v-model="form.name"
+                type="text"
+                required
             >
-              {{ option }}
-            </option>
-          </select>
-        </label>
+          </label>
 
-        <label>
-          Pattern
+          <label>
+            Priority
 
-          <input
-              v-model="form.pattern"
-              type="text"
-              placeholder="e.g. api.example.com/users"
-              required
-          >
-        </label>
-
-        <label class="checkbox">
-          <input
-              v-model="form.caseSensitive"
-              type="checkbox"
-          >
-
-          Case sensitive
-        </label>
-
-        <label>
-          Status code (optional)
-
-          <input
-              v-model="form.statusCode"
-              type="number"
-              placeholder="200"
-          >
-        </label>
-
-        <label>
-          Status text (optional)
-
-          <input
-              v-model="form.statusText"
-              type="text"
-              placeholder="OK"
-          >
-        </label>
-
-        <label>
-          Response headers (one per line)
-
-          <textarea
-              v-model="form.responseHeaders"
-              rows="3"
-              placeholder="x-debug: enabled"
-          />
-        </label>
-
-        <label>
-          Body mode
-
-          <select v-model="form.bodyMode">
-            <option
-                v-for="mode in bodyModeOptions"
-                :key="mode"
-                :value="mode"
+            <input
+                v-model="form.priority"
+                type="number"
+                min="0"
+                step="1"
             >
-              {{ mode }}
-            </option>
-          </select>
-        </label>
+          </label>
 
-        <label v-if="form.bodyMode === 'static'">
-          Static body
+          <label>
+            Intercept by
 
-          <textarea
-              v-model="form.bodyStaticValue"
-              rows="4"
-          />
-        </label>
+            <select v-model="form.targetField">
+              <option value="url">URL</option>
 
-        <label
-            v-if="form.bodyMode === 'text-replace' || form.bodyMode === 'regex-replace'"
-        >
-          Search
+              <option value="domain">Domain</option>
+            </select>
+          </label>
 
-          <input
-              v-model="form.bodySearch"
-              type="text"
+          <label>
+            Match type
+
+            <select v-model="form.matchType">
+              <option
+                  v-for="option in matchTypeOptions"
+                  :key="option"
+                  :value="option"
+              >
+                {{ option }}
+              </option>
+            </select>
+          </label>
+
+          <label>
+            Pattern
+
+            <input
+                v-model="form.pattern"
+                type="text"
+                placeholder="e.g. api.example.com/users"
+                required
+            >
+          </label>
+
+          <label class="checkbox">
+            <input
+                v-model="form.caseSensitive"
+                type="checkbox"
+            >
+
+            Case sensitive
+          </label>
+
+          <label>
+            Status code (optional)
+
+            <input
+                v-model="form.statusCode"
+                type="number"
+                placeholder="200"
+            >
+          </label>
+
+          <label>
+            Status text (optional)
+
+            <input
+                v-model="form.statusText"
+                type="text"
+                placeholder="OK"
+            >
+          </label>
+
+          <label>
+            Response headers (one per line)
+
+            <textarea
+                v-model="form.responseHeaders"
+                rows="3"
+                placeholder="x-debug: enabled"
+            />
+          </label>
+
+          <label>
+            Body mode
+
+            <select v-model="form.bodyMode">
+              <option
+                  v-for="mode in bodyModeOptions"
+                  :key="mode"
+                  :value="mode"
+              >
+                {{ mode }}
+              </option>
+            </select>
+          </label>
+
+          <label v-if="form.bodyMode === 'static'">
+            Static body
+
+            <textarea
+                v-model="form.bodyStaticValue"
+                rows="4"
+            />
+          </label>
+
+          <label
+              v-if="form.bodyMode === 'text-replace' || form.bodyMode === 'regex-replace'"
           >
-        </label>
+            Search
 
-        <label
-            v-if="form.bodyMode === 'text-replace' || form.bodyMode === 'regex-replace' || form.bodyMode === 'full-replacement'"
-        >
-          Replacement
+            <input
+                v-model="form.bodySearch"
+                type="text"
+            >
+          </label>
 
-          <textarea
-              v-model="form.bodyReplacement"
-              rows="4"
-          />
-        </label>
-
-        <div class="actions">
-          <button
-              type="submit"
-              :disabled="!canSubmit || savingRule"
+          <label
+              v-if="form.bodyMode === 'text-replace' || form.bodyMode === 'regex-replace' || form.bodyMode === 'full-replacement'"
           >
-            {{ savingRule ? 'Saving...' : (isEditing ? 'Update rule' : 'Save rule') }}
-          </button>
+            Replacement
 
-          <button
-              v-if="isEditing"
-              type="button"
-              class="secondary"
-              @click="resetForm"
-          >
-            Cancel
-          </button>
+            <textarea
+                v-model="form.bodyReplacement"
+                rows="4"
+            />
+          </label>
 
-          <button
-              v-else
-              type="button"
-              class="secondary"
-              @click="resetForm"
-          >
-            Clear
-          </button>
-        </div>
-      </form>
+          <div class="actions">
+            <button
+                type="submit"
+                :disabled="!canSubmit || savingRule"
+            >
+              {{ savingRule ? 'Saving...' : (isEditing ? 'Update rule' : 'Save rule') }}
+            </button>
+
+            <button
+                v-if="isEditing"
+                type="button"
+                class="secondary"
+                @click="resetForm"
+            >
+              Cancel
+            </button>
+
+            <button
+                v-else
+                type="button"
+                class="secondary"
+                @click="resetForm"
+            >
+              Clear
+            </button>
+          </div>
+        </form>
       </div>
     </section>
 
@@ -1096,24 +1099,26 @@ function createDefaultFormState(): RuleFormState {
             v-if="logs.length > 0"
             class="logs"
         >
-        <li
-            v-for="log in logs"
-            :key="log.id"
-        >
-          <span class="log-time">{{ log.time }}</span>
+          <li
+              v-for="log in logs"
+              :key="log.id"
+          >
+            <span class="log-time">{{ log.time }}</span>
 
-          <span class="log-message">{{ log.message }}</span>
-        </li>
-      </ul>
+            <span class="log-message">{{ log.message }}</span>
+          </li>
+        </ul>
 
-      <p
-          v-else
-          class="empty-log"
+        <p
+            v-else
+            class="empty-log"
         >
           No activity yet.
         </p>
       </template>
     </section>
+
+    <div class="version">v{{ version }}</div>
   </main>
 </template>
 
@@ -1376,5 +1381,12 @@ button:disabled {
 .empty-log {
   color: #9ca3af;
   font-size: 13px;
+}
+
+.version {
+  margin-top: auto;
+  color: #6b7280;
+  font-size: 12px;
+  text-align: center;
 }
 </style>
