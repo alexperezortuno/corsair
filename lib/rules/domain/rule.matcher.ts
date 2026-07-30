@@ -1,9 +1,9 @@
-import type {InterceptionRule, MatchCondition,} from './rule.types';
+import type {HttpMethod, InterceptionRule, MatchCondition, ResourceType,} from './rule.types';
 
 export interface RuleMatchContext {
     url: string;
     method: string;
-    resourceType?: string;
+    resourceType?: ResourceType;
 }
 
 export function matchesCondition(
@@ -14,30 +14,38 @@ export function matchesCondition(
         return true;
     }
 
-    if (!condition.pattern.trim()) {
+    const pattern = condition.pattern.trim();
+
+    if (!pattern) {
         return true;
     }
 
-    const flags = condition.caseSensitive ? '' : 'i';
-
     switch (condition.type) {
         case 'exact':
-            return condition.caseSensitive
-                ? value === condition.pattern
-                : value.toLowerCase() === condition.pattern.toLowerCase();
+            return compareExact(
+                value,
+                pattern,
+                condition.caseSensitive,
+            );
 
         case 'contains':
-            return condition.caseSensitive
-                ? value.includes(condition.pattern)
-                : value
-                    .toLowerCase()
-                    .includes(condition.pattern.toLowerCase());
+            return compareContains(
+                value,
+                pattern,
+                condition.caseSensitive,
+            );
 
         case 'wildcard':
-            return wildcardToRegExp(condition.pattern, flags).test(value);
+            return wildcardToRegExp(
+                pattern,
+                condition.caseSensitive,
+            ).test(value);
 
         case 'regex':
-            return new RegExp(condition.pattern, flags).test(value);
+            return new RegExp(
+                pattern,
+                condition.caseSensitive ? '' : 'i',
+            ).test(value);
     }
 }
 
@@ -57,11 +65,12 @@ export function matchesRule(
         return false;
     }
 
+    const method =
+        context.method.toUpperCase() as HttpMethod;
+
     if (
         rule.target.methods.length > 0 &&
-        !rule.target.methods.includes(
-            context.method.toUpperCase() as never,
-        )
+        !rule.target.methods.includes(method)
     ) {
         return false;
     }
@@ -70,11 +79,21 @@ export function matchesRule(
         return false;
     }
 
-    if (!matchesCondition(parsedUrl.hostname, rule.target.domain)) {
+    if (
+        !matchesCondition(
+            parsedUrl.hostname,
+            rule.target.domain,
+        )
+    ) {
         return false;
     }
 
-    if (!matchesCondition(parsedUrl.pathname, rule.target.path)) {
+    if (
+        !matchesCondition(
+            parsedUrl.pathname,
+            rule.target.path,
+        )
+    ) {
         return false;
     }
 
@@ -82,7 +101,7 @@ export function matchesRule(
         rule.target.resourceTypes.length > 0 &&
         context.resourceType &&
         !rule.target.resourceTypes.includes(
-            context.resourceType as never,
+            context.resourceType,
         )
     ) {
         return false;
@@ -91,13 +110,42 @@ export function matchesRule(
     return true;
 }
 
+function compareExact(
+    value: string,
+    pattern: string,
+    caseSensitive: boolean,
+): boolean {
+    if (caseSensitive) {
+        return value === pattern;
+    }
+
+    return value.toLowerCase() === pattern.toLowerCase();
+}
+
+function compareContains(
+    value: string,
+    pattern: string,
+    caseSensitive: boolean,
+): boolean {
+    if (caseSensitive) {
+        return value.includes(pattern);
+    }
+
+    return value
+        .toLowerCase()
+        .includes(pattern.toLowerCase());
+}
+
 function wildcardToRegExp(
     pattern: string,
-    flags: string,
+    caseSensitive: boolean,
 ): RegExp {
-    const escaped = pattern
+    const escapedPattern = pattern
         .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
         .replace(/\*/g, '.*');
 
-    return new RegExp(`^${escaped}$`, flags);
+    return new RegExp(
+        `^${escapedPattern}$`,
+        caseSensitive ? '' : 'i',
+    );
 }
