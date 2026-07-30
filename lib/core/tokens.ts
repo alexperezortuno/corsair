@@ -10,6 +10,14 @@ import type {DebuggerGateway,} from '@/lib/debugger/domain/debugger.gateway';
 
 import type {InterceptionService,} from '@/lib/interceptor/application/interception.service';
 
+import type {
+    NetworkInterceptorService,
+} from '@/lib/network/application/network-interceptor.service';
+
+import type {
+    NetworkGateway,
+} from '@/lib/network/domain/network.gateway';
+
 export const TOKENS = {
     logger: Symbol(
         'corsair.core.logger',
@@ -57,5 +65,17 @@ export const TOKENS = {
         'corsair.debugger.service',
     ) as symbol & {
         readonly __type?: DebuggerService;
+    },
+
+    networkGateway: Symbol(
+        'corsair.network.gateway',
+    ) as symbol & {
+        readonly __type?: NetworkGateway;
+    },
+
+    networkInterceptorService: Symbol(
+        'corsair.network.interceptor-service',
+    ) as symbol & {
+        readonly __type?: NetworkInterceptorService;
     },
 } as const;

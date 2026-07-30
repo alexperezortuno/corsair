@@ -7,7 +7,12 @@ import type {Logger,} from '@/lib/core/logger';
 
 import type {DebuggerGateway, DebuggerUnsubscribe,} from '../domain/debugger.gateway';
 
-import type {DebuggerSession, DebuggerTarget,} from '../domain/debugger.types';
+import type {
+    DebuggerCommandParams,
+    DebuggerCommandResult,
+    DebuggerSession,
+    DebuggerTarget,
+} from '../domain/debugger.types';
 
 export class DebuggerService {
     private readonly sessions =
@@ -191,6 +196,42 @@ export class DebuggerService {
             type: 'tab',
             tabId,
         });
+    }
+
+    async sendCommand<
+        TResult extends DebuggerCommandResult,
+    >(
+        tabId: number,
+        method: string,
+        params: DebuggerCommandParams = {},
+    ): Promise<TResult> {
+        const target: DebuggerTarget = {
+            type: 'tab',
+            tabId,
+        };
+
+        const attached =
+            await this.gateway.isAttached(target);
+
+        if (!attached) {
+            throw new Error(
+                `El debugger no está conectado a la pestaña ${tabId}`,
+            );
+        }
+
+        this.logger.debug(
+            'Enviando comando CDP',
+            {
+                tabId,
+                method,
+            },
+        );
+
+        return this.gateway.sendCommand<TResult>(
+            target,
+            method,
+            params,
+        );
     }
 
     getSessions(): DebuggerSession[] {
