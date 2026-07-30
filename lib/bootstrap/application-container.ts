@@ -20,6 +20,14 @@ import {RequestRuleStage,} from '@/lib/interceptor/stages/request-rule.stage';
 
 import {ResponseRuleStage,} from '@/lib/interceptor/stages/response-rule.stage';
 
+import {DebuggerService,} from '@/lib/debugger/application/debugger.service';
+
+import {InMemoryDebuggerGateway,} from '@/lib/debugger/infrastructure/in-memory-debugger.gateway';
+
+import {InterceptionService,} from '@/lib/interceptor/application/interception.service';
+
+import type {DebuggerGateway,} from '@/lib/debugger/domain/debugger.gateway';
+
 let applicationContainer: Container | null = null;
 
 export function createApplicationContainer(): Container {
@@ -83,6 +91,73 @@ export function createApplicationContainer(): Container {
                 ],
                 logger,
             );
+        },
+    );
+
+    container.registerSingleton<InterceptionService>(
+        TOKENS.interceptionService,
+        (currentContainer) => {
+            const ruleService =
+                currentContainer.resolve<RuleService>(
+                    TOKENS.ruleService,
+                );
+
+            const pipeline =
+                currentContainer.resolve<InterceptionPipeline>(
+                    TOKENS.interceptionPipeline,
+                );
+
+            const eventBus =
+                currentContainer.resolve<EventBus>(
+                    TOKENS.eventBus,
+                );
+
+            const logger =
+                currentContainer.resolve<Logger>(
+                    TOKENS.logger,
+                );
+
+            return new InterceptionService(
+                ruleService,
+                pipeline,
+                eventBus,
+                logger,
+            );
+        },
+    );
+
+    container.registerSingleton<DebuggerGateway>(
+        TOKENS.debuggerGateway,
+        () => new InMemoryDebuggerGateway(),
+    );
+
+    container.registerSingleton<DebuggerService>(
+        TOKENS.debuggerService,
+        (currentContainer) => {
+            const gateway =
+                currentContainer.resolve<DebuggerGateway>(
+                    TOKENS.debuggerGateway,
+                );
+
+            const eventBus =
+                currentContainer.resolve<EventBus>(
+                    TOKENS.eventBus,
+                );
+
+            const logger =
+                currentContainer.resolve<Logger>(
+                    TOKENS.logger,
+                );
+
+            const service = new DebuggerService(
+                gateway,
+                eventBus,
+                logger,
+            );
+
+            service.initialize();
+
+            return service;
         },
     );
 
