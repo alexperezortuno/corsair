@@ -67,7 +67,7 @@ export class DebuggerService {
                 );
 
                 this.logger.warn(
-                    'Debugger desconectado',
+                    'Debugger detached',
                     {
                         target: event.target,
                         reason: event.reason,
@@ -94,8 +94,21 @@ export class DebuggerService {
         }
 
         try {
+            this.logger.info(
+                'Checking debugger attachment state',
+                { tabId },
+            );
+
             const alreadyAttached =
                 await this.gateway.isAttached(target);
+
+            this.logger.info(
+                'Debugger attachment state',
+                {
+                    tabId,
+                    alreadyAttached,
+                },
+            );
 
             const session = alreadyAttached
                 ? {
@@ -103,7 +116,7 @@ export class DebuggerService {
                     protocolVersion: '1.3',
                     attachedAt: new Date().toISOString(),
                 }
-                : await this.gateway.attach(target);
+                : await this.attachWithRetry(target);
 
             this.sessions.set(key, session);
 
@@ -118,8 +131,8 @@ export class DebuggerService {
 
             this.logger.info(
                 alreadyAttached
-                    ? 'Sesión de debugger recuperada'
-                    : 'Debugger conectado a pestaña',
+                    ? 'Debugger session resumed'
+                    : 'Debugger attached to tab',
                 {
                     tabId,
                     protocolVersion:
@@ -145,7 +158,7 @@ export class DebuggerService {
             );
 
             this.logger.error(
-                'No fue posible conectar el debugger',
+                'Unable to attach debugger',
                 error,
                 {
                     tabId,
@@ -182,7 +195,7 @@ export class DebuggerService {
         );
 
         this.logger.info(
-            'Debugger desconectado manualmente',
+            'Debugger manually detached',
             {
                 tabId,
             },
@@ -210,28 +223,92 @@ export class DebuggerService {
             tabId,
         };
 
-        const attached =
-            await this.gateway.isAttached(target);
-
-        if (!attached) {
-            throw new Error(
-                `El debugger no está conectado a la pestaña ${tabId}`,
-            );
-        }
-
         this.logger.debug(
-            'Enviando comando CDP',
+            'Sending CDP command',
             {
                 tabId,
                 method,
             },
         );
 
-        return this.gateway.sendCommand<TResult>(
-            target,
-            method,
-            params,
-        );
+        try {
+            return await this.gateway.sendCommand<TResult>(
+                target,
+                method,
+                params,
+            );
+        } catch (cause) {
+            const error = normalizeError(cause);
+
+            if (
+                !error.message.includes(
+                    'Debugger is not attached',
+                )
+            ) {
+                throw error;
+            }
+
+            this.logger.warn(
+                'CDP command failed, attempting re-attach',
+                {
+                    tabId,
+                    method,
+                    error: error.message,
+                },
+            );
+
+            return this.sendCommandWithReattach(
+                target,
+                method,
+                params,
+            );
+        }
+    }
+
+    private async sendCommandWithReattach<
+        TResult extends DebuggerCommandResult,
+    >(
+        target: DebuggerTarget,
+        method: string,
+        params: DebuggerCommandParams,
+    ): Promise<TResult> {
+        let lastError: Error | null = null;
+
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            try {
+                if (await this.gateway.isAttached(target)) {
+                    await this.gateway.detach(target);
+                    await wait(100);
+                }
+
+                await this.gateway.attach(target);
+                await wait(100);
+
+                return await this.gateway.sendCommand<TResult>(
+                    target,
+                    method,
+                    params,
+                );
+            } catch (cause) {
+                lastError = normalizeError(cause);
+
+                this.logger.warn(
+                    'Re-attach attempt failed',
+                    {
+                        tabId: target.tabId,
+                        method,
+                        attempt: attempt + 1,
+                        error: lastError.message,
+                    },
+                );
+
+                if (attempt < 2) {
+                    await wait(200);
+                }
+            }
+        }
+
+        throw lastError ?? new Error('Re-attach failed');
     }
 
     getSessions(): DebuggerSession[] {
@@ -245,6 +322,58 @@ export class DebuggerService {
         this.unsubscribeProtocolEvents = null;
         this.unsubscribeDetachEvents = null;
         this.sessions.clear();
+    }
+
+    private async attachWithRetry(
+        target: DebuggerTarget,
+    ): Promise<DebuggerSession> {
+        let lastError: Error | null = null;
+
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            try {
+                this.logger.info(
+                    'Calling chrome.debugger.attach',
+                    {
+                        tabId: target.tabId,
+                        attempt: attempt + 1,
+                    },
+                );
+
+                const session =
+                    await this.gateway.attach(target);
+
+                this.logger.info(
+                    'chrome.debugger.attach succeeded',
+                    {
+                        tabId: target.tabId,
+                    },
+                );
+
+                return session;
+            } catch (cause) {
+                lastError = normalizeError(cause);
+
+                this.logger.error(
+                    'chrome.debugger.attach failed',
+                    lastError,
+                    {
+                        tabId: target.tabId,
+                        attempt: attempt + 1,
+                    },
+                );
+
+                if (
+                    attempt < 2 &&
+                    !lastError.message.includes(
+                        'Cannot access a chrome',
+                    )
+                ) {
+                    await wait(150);
+                }
+            }
+        }
+
+        throw lastError ?? new Error('Debugger attach failed');
     }
 }
 
@@ -268,4 +397,50 @@ function normalizeError(cause: unknown): Error {
     }
 
     return new Error(String(cause));
+}
+
+interface RetryOptions<T> {
+    attempts: number;
+    delayMs: number;
+    shouldRetry: (resultOrError: T | Error) => boolean;
+}
+
+async function withRetry<T>(
+    task: () => Promise<T>,
+    options: RetryOptions<T>,
+): Promise<T> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < options.attempts; attempt += 1) {
+        try {
+            const result = await task();
+
+            if (!options.shouldRetry(result)) {
+                return result;
+            }
+
+            if (attempt < options.attempts - 1) {
+                await wait(options.delayMs);
+            }
+        } catch (cause) {
+            lastError = normalizeError(cause);
+
+            if (
+                attempt < options.attempts - 1 &&
+                options.shouldRetry(lastError)
+            ) {
+                await wait(options.delayMs);
+            } else {
+                throw lastError;
+            }
+        }
+    }
+
+    throw lastError ?? new Error('Retry failed');
+}
+
+function wait(delayMs: number): Promise<void> {
+    return new Promise((resolve) => {
+        setTimeout(resolve, delayMs);
+    });
 }
