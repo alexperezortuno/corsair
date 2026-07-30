@@ -10,15 +10,14 @@ import {
   createPipelineDemoTransaction,
 } from '@/lib/interceptor/application/interception-pipeline.demo';
 
-import type {
-  InterceptionService,
-} from '@/lib/interceptor/application/interception.service';
+import type {InterceptionService,} from '@/lib/interceptor/application/interception.service';
 
-import type {
-  DebuggerService,
-} from '@/lib/debugger/application/debugger.service';
+import {DebuggerRuntimeClient,} from '@/lib/debugger/runtime/debugger.client';
 
 const rulesStore = useRulesStore();
+
+const debuggerClient =
+    new DebuggerRuntimeClient();
 
 onMounted(async () => {
   await rulesStore.loadRules();
@@ -33,11 +32,6 @@ const container = getApplicationContainer();
 const interceptionService =
     container.resolve<InterceptionService>(
         TOKENS.interceptionService,
-    );
-
-const debuggerService =
-    container.resolve<DebuggerService>(
-        TOKENS.debuggerService,
     );
 
 async function handleTestPipeline(): Promise<void> {
@@ -61,25 +55,79 @@ async function handleTestPipeline(): Promise<void> {
 }
 
 async function handleTestDebugger(): Promise<void> {
-  const session =
-      await debuggerService.attachToTab(999);
+  try {
+    const [activeTab] =
+        await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
 
-  console.info(
-      '[Corsair] Debugger temporal conectado',
-      session,
-  );
+    if (!activeTab.id) {
+      throw new Error(
+          'No se encontró la pestaña activa',
+      );
+    }
 
-  const attached =
-      await debuggerService.isAttachedToTab(999);
+    const session =
+        await debuggerClient.attachToTab(
+            activeTab.id,
+        );
 
-  console.info(
-      '[Corsair] Estado del debugger',
-      {
-        attached,
-      },
-  );
+    console.info(
+        '[Corsair] Debugger real conectado',
+        session,
+    );
 
-  await debuggerService.detachFromTab(999);
+    const attached =
+        await debuggerClient.isAttachedToTab(
+            activeTab.id,
+        );
+
+    console.info(
+        '[Corsair] Estado real del debugger',
+        {
+          tabId: activeTab.id,
+          attached,
+        },
+    );
+  } catch (error) {
+    console.error(
+        '[Corsair] No fue posible conectar el debugger',
+        error,
+    );
+  }
+}
+
+async function handleDetachDebugger(): Promise<void> {
+  try {
+    const [activeTab] =
+        await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+
+    if (!activeTab.id) {
+      throw new Error(
+          'No se encontró la pestaña activa',
+      );
+    }
+
+    await debuggerClient.detachFromTab(
+        activeTab.id,
+    );
+
+    console.info(
+        '[Corsair] Debugger desconectado',
+        {
+          tabId: activeTab.id,
+        },
+    );
+  } catch (error) {
+    console.error(
+        '[Corsair] No fue posible desconectar el debugger',
+        error,
+    );
+  }
 }
 </script>
 
@@ -92,6 +140,36 @@ async function handleTestDebugger(): Promise<void> {
         </span>
 
         <h1>HTTP Interceptor</h1>
+      </div>
+
+      <div class="header-actions">
+        <button
+            type="button"
+            @click="handleTestDebugger"
+        >
+          Conectar
+        </button>
+
+        <button
+            type="button"
+            @click="handleDetachDebugger"
+        >
+          Desconectar
+        </button>
+
+        <button
+            type="button"
+            @click="handleTestPipeline"
+        >
+          Probar interceptor
+        </button>
+
+        <button
+            type="button"
+            @click="handleCreateRule"
+        >
+          Nueva regla
+        </button>
       </div>
 
       <button
