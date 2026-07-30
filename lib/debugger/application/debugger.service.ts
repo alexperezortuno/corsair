@@ -79,21 +79,28 @@ export class DebuggerService {
             tabId,
         };
 
+        const key = targetToKey(target);
+
         const existingSession =
-            this.sessions.get(targetToKey(target));
+            this.sessions.get(key);
 
         if (existingSession) {
             return existingSession;
         }
 
         try {
-            const session =
-                await this.gateway.attach(target);
+            const alreadyAttached =
+                await this.gateway.isAttached(target);
 
-            this.sessions.set(
-                targetToKey(target),
-                session,
-            );
+            const session = alreadyAttached
+                ? {
+                    target,
+                    protocolVersion: '1.3',
+                    attachedAt: new Date().toISOString(),
+                }
+                : await this.gateway.attach(target);
+
+            this.sessions.set(key, session);
 
             await this.eventBus.publish(
                 createEvent(
@@ -105,7 +112,9 @@ export class DebuggerService {
             );
 
             this.logger.info(
-                'Debugger conectado a pestaña',
+                alreadyAttached
+                    ? 'Sesión de debugger recuperada'
+                    : 'Debugger conectado a pestaña',
                 {
                     tabId,
                     protocolVersion:
@@ -150,15 +159,22 @@ export class DebuggerService {
             tabId,
         };
 
-        const key = targetToKey(target);
+        const attached =
+            await this.gateway.isAttached(target);
 
-        if (!this.sessions.has(key)) {
+        if (!attached) {
+            this.sessions.delete(
+                targetToKey(target),
+            );
+
             return;
         }
 
         await this.gateway.detach(target);
 
-        this.sessions.delete(key);
+        this.sessions.delete(
+            targetToKey(target),
+        );
 
         this.logger.info(
             'Debugger desconectado manualmente',
