@@ -1,6 +1,16 @@
 <script setup lang="ts">
 import {onMounted} from 'vue';
 import {useRulesStore} from "@/stores/rules.store";
+import {getApplicationContainer,} from '@/lib/bootstrap/application-container';
+
+import {TOKENS,} from '@/lib/core/tokens';
+
+import {
+  createPipelineDemoRule,
+  createPipelineDemoTransaction,
+} from '@/lib/interceptor/application/interception-pipeline.demo';
+
+import type {InterceptionPipeline,} from '@/lib/interceptor/application/interception-pipeline';
 
 
 const rulesStore = useRulesStore();
@@ -11,6 +21,31 @@ onMounted(async () => {
 
 async function handleCreateRule(): Promise<void> {
   await rulesStore.createRule();
+}
+
+const container = getApplicationContainer();
+
+const pipeline =
+    container.resolve<InterceptionPipeline>(
+        TOKENS.interceptionPipeline,
+    );
+
+async function handleTestPipeline(): Promise<void> {
+  const transaction =
+      createPipelineDemoTransaction();
+
+  const rule =
+      createPipelineDemoRule();
+
+  const result = await pipeline.execute(
+      transaction,
+      [rule],
+  );
+
+  console.info(
+      '[Corsair] Resultado del pipeline',
+      result,
+  );
 }
 </script>
 
@@ -24,6 +59,13 @@ async function handleCreateRule(): Promise<void> {
 
         <h1>HTTP Interceptor</h1>
       </div>
+
+      <button
+          type="button"
+          @click="handleTestPipeline"
+      >
+        Probar pipeline
+      </button>
 
       <button
           type="button"
@@ -207,5 +249,11 @@ h1 {
 
 .error {
   color: #fca5a5;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 </style>
