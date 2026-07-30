@@ -54,6 +54,10 @@ const attachError = ref<string | null>(null);
 
 const logs = ref<LogEntry[]>([]);
 
+const showNewRule = ref(true);
+const showSavedRules = ref(true);
+const showActivityLog = ref(true);
+
 const form = reactive<RuleFormState>(
     createDefaultFormState(),
 );
@@ -656,6 +660,18 @@ function clearLogs(): void {
     logs.value = [];
 }
 
+function toggleNewRule(): void {
+    showNewRule.value = !showNewRule.value;
+}
+
+function toggleSavedRules(): void {
+    showSavedRules.value = !showSavedRules.value;
+}
+
+function toggleActivityLog(): void {
+    showActivityLog.value = !showActivityLog.value;
+}
+
 function handleRuntimeMessage(
     message: unknown,
 ): void {
@@ -791,11 +807,25 @@ function createDefaultFormState(): RuleFormState {
     </header>
 
     <section class="panel">
-      <h2>
-        {{ isEditing ? 'Edit rule' : 'New rule' }}
-      </h2>
+      <div
+          class="panel-header"
+          @click="toggleNewRule"
+      >
+        <h2>
+          {{ isEditing ? 'Edit rule' : 'New rule' }}
+        </h2>
 
-      <form @submit.prevent="handleSaveRule">
+        <span
+            class="chevron"
+            :class="{ expanded: showNewRule }"
+        >▼</span>
+      </div>
+
+      <div
+          v-if="showNewRule"
+          class="panel-content"
+      >
+        <form @submit.prevent="handleSaveRule">
         <label>
           Name
 
@@ -963,6 +993,7 @@ function createDefaultFormState(): RuleFormState {
           </button>
         </div>
       </form>
+      </div>
     </section>
 
     <p v-if="rulesStore.loading">Loading rules...</p>
@@ -975,61 +1006,83 @@ function createDefaultFormState(): RuleFormState {
     </p>
 
     <section class="panel">
-      <h2>Saved rules</h2>
-
-      <p>
-        Total: {{ rulesStore.rules.length }} · Active: {{ rulesStore.activeRulesCount }}
-      </p>
-
-      <ul
-          v-if="rulesStore.rules.length > 0"
-          class="rules"
+      <div
+          class="panel-header"
+          @click="toggleSavedRules"
       >
-        <li
-            v-for="rule in rulesStore.rules"
-            :key="rule.id"
+        <h2>Saved rules</h2>
+
+        <span
+            class="chevron"
+            :class="{ expanded: showSavedRules }"
+        >▼</span>
+      </div>
+
+      <template v-if="showSavedRules">
+        <p>
+          Total: {{ rulesStore.rules.length }} · Active: {{ rulesStore.activeRulesCount }}
+        </p>
+
+        <ul
+            v-if="rulesStore.rules.length > 0"
+            class="rules"
         >
-          <div class="rule-data">
-            <strong>{{ rule.name }}</strong>
+          <li
+              v-for="rule in rulesStore.rules"
+              :key="rule.id"
+          >
+            <div class="rule-data">
+              <strong>{{ rule.name }}</strong>
 
-            <span>{{ targetSummary(rule) }}</span>
-          </div>
+              <span>{{ targetSummary(rule) }}</span>
+            </div>
 
-          <div class="rule-actions">
-            <button
-                type="button"
-                class="secondary"
-                @click="startEditRule(rule)"
-            >
-              Edit
-            </button>
+            <div class="rule-actions">
+              <button
+                  type="button"
+                  class="secondary"
+                  @click="startEditRule(rule)"
+              >
+                Edit
+              </button>
 
-            <button
-                type="button"
-                class="secondary"
-                @click="handleToggleRule(rule)"
-            >
-              {{ rule.enabled ? 'Disable' : 'Enable' }}
-            </button>
+              <button
+                  type="button"
+                  class="secondary"
+                  @click="handleToggleRule(rule)"
+              >
+                {{ rule.enabled ? 'Disable' : 'Enable' }}
+              </button>
 
-            <button
-                type="button"
-                class="danger"
-                @click="handleDeleteRule(rule.id)"
-            >
-              Delete
-            </button>
-          </div>
-        </li>
-      </ul>
+              <button
+                  type="button"
+                  class="danger"
+                  @click="handleDeleteRule(rule.id)"
+              >
+                Delete
+              </button>
+            </div>
+          </li>
+        </ul>
 
-      <p v-else>No rules created yet.</p>
+        <p v-else>No rules created yet.</p>
+      </template>
     </section>
 
     <section class="panel log-panel">
-      <div class="panel-header">
+      <div
+          class="panel-header"
+          @click="toggleActivityLog"
+      >
         <h2>Activity log</h2>
 
+        <span
+            class="chevron"
+            :class="{ expanded: showActivityLog }"
+        >▼</span>
+      </div>
+
+      <template v-if="showActivityLog">
         <button
             v-if="logs.length > 0"
             type="button"
@@ -1038,12 +1091,11 @@ function createDefaultFormState(): RuleFormState {
         >
           Clear log
         </button>
-      </div>
 
-      <ul
-          v-if="logs.length > 0"
-          class="logs"
-      >
+        <ul
+            v-if="logs.length > 0"
+            class="logs"
+        >
         <li
             v-for="log in logs"
             :key="log.id"
@@ -1054,9 +1106,13 @@ function createDefaultFormState(): RuleFormState {
         </li>
       </ul>
 
-      <p v-else class="empty-log">
-        No activity yet.
-      </p>
+      <p
+          v-else
+          class="empty-log"
+        >
+          No activity yet.
+        </p>
+      </template>
     </section>
   </main>
 </template>
@@ -1081,6 +1137,9 @@ function createDefaultFormState(): RuleFormState {
   padding: 18px;
   display: grid;
   gap: 16px;
+  align-items: start;
+  align-content: start;
+  grid-auto-rows: max-content;
 }
 
 .header-top {
@@ -1141,7 +1200,7 @@ function createDefaultFormState(): RuleFormState {
 }
 
 .panel h2 {
-  margin: 0 0 12px;
+  margin: 0;
 }
 
 .panel-header {
@@ -1149,11 +1208,27 @@ function createDefaultFormState(): RuleFormState {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 12px;
+  cursor: pointer;
+  user-select: none;
 }
 
 .panel-header h2 {
   margin: 0;
+}
+
+.panel-content {
+  margin-top: 12px;
+}
+
+.chevron {
+  font-size: 12px;
+  color: #9ca3af;
+  transition: transform 0.2s ease;
+  display: inline-block;
+}
+
+.chevron.expanded {
+  transform: rotate(180deg);
 }
 
 button.small {
