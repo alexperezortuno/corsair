@@ -32,3 +32,5 @@ web-ext.config.ts
 *.njsproj
 *.sln
 *.sw?
+AGENTS.md
+graphify-out
