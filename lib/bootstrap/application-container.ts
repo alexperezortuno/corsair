@@ -26,9 +26,19 @@ import {InMemoryDebuggerGateway,} from '@/lib/debugger/infrastructure/in-memory-
 
 import {InterceptionService,} from '@/lib/interceptor/application/interception.service';
 
+import type {DebuggerGateway,} from '@/lib/debugger/domain/debugger.gateway';
+
+import {
+    NetworkInterceptorService,
+} from '@/lib/network/application/network-interceptor.service';
+
+import {
+    CdpNetworkGateway,
+} from '@/lib/network/infrastructure/cdp-network.gateway';
+
 import type {
-    DebuggerGateway,
-} from '@/lib/debugger/domain/debugger.gateway';
+    NetworkGateway,
+} from '@/lib/network/domain/network.gateway';
 
 export interface ApplicationContainerOptions {
     debuggerGatewayFactory?: () => DebuggerGateway;
@@ -38,7 +48,7 @@ let applicationContainer: Container | null = null;
 
 export function createApplicationContainer(
     options: ApplicationContainerOptions = {},
-    ): Container {
+): Container {
     const container = new Container();
 
     container.registerSingleton<Logger>(
@@ -175,6 +185,55 @@ export function createApplicationContainer(
         },
     );
 
+    if (options.enableNetworkInterceptor) {
+        container.registerSingleton<NetworkGateway>(
+            TOKENS.networkGateway,
+            (currentContainer) => {
+                const debuggerService =
+                    currentContainer.resolve<DebuggerService>(
+                        TOKENS.debuggerService,
+                    );
+
+                return new CdpNetworkGateway(
+                    debuggerService,
+                );
+            },
+        );
+
+        container.registerSingleton<
+            NetworkInterceptorService
+        >(
+            TOKENS.networkInterceptorService,
+            (currentContainer) => {
+                const gateway =
+                    currentContainer.resolve<NetworkGateway>(
+                        TOKENS.networkGateway,
+                    );
+
+                const eventBus =
+                    currentContainer.resolve<EventBus>(
+                        TOKENS.eventBus,
+                    );
+
+                const logger =
+                    currentContainer.resolve<Logger>(
+                        TOKENS.logger,
+                    );
+
+                const service =
+                    new NetworkInterceptorService(
+                        gateway,
+                        eventBus,
+                        logger,
+                    );
+
+                service.initialize();
+
+                return service;
+            },
+        );
+    }
+
     return container;
 }
 
@@ -185,4 +244,10 @@ export function getApplicationContainer(): Container {
     }
 
     return applicationContainer;
+}
+
+export interface ApplicationContainerOptions {
+    debuggerGatewayFactory?: () => DebuggerGateway;
+
+    enableNetworkInterceptor?: boolean;
 }
