@@ -1,48 +1,93 @@
 <script setup lang="ts">
-const extensionVersion = chrome.runtime.getManifest().version;
+import {onMounted} from 'vue';
+import {useRulesStore} from "@/stores/rules.store";
+
+
+const rulesStore = useRulesStore();
+
+onMounted(async () => {
+  await rulesStore.loadRules();
+});
+
+async function handleCreateRule(): Promise<void> {
+  await rulesStore.createRule();
+}
 </script>
 
 <template>
-  <main class="side-panel">
+  <main class="page">
     <header class="header">
       <div>
-        <span class="eyebrow">Chrome Extension</span>
+        <span class="eyebrow">
+          Corsair
+        </span>
 
-        <h1>Corsair</h1>
-
-        <p class="subtitle">
-          HTTP Interceptor
-        </p>
+        <h1>HTTP Interceptor</h1>
       </div>
 
-      <span class="status">
-        Inactivo
-      </span>
+      <button
+          type="button"
+          @click="handleCreateRule"
+      >
+        Nueva regla
+      </button>
     </header>
 
-    <section class="content">
-      <h2>Extensión preparada</h2>
+    <section class="summary">
+      <article>
+        <span>Total de reglas</span>
+        <strong>{{ rulesStore.rules.length }}</strong>
+      </article>
+
+      <article>
+        <span>Reglas activas</span>
+        <strong>{{ rulesStore.activeRulesCount }}</strong>
+      </article>
+    </section>
+
+    <p v-if="rulesStore.loading">
+      Cargando reglas...
+    </p>
+
+    <p
+        v-if="rulesStore.error"
+        class="error"
+    >
+      {{ rulesStore.error }}
+    </p>
+
+    <section v-if="rulesStore.rules.length > 0">
+      <h2>Reglas</h2>
+
+      <ul class="rules">
+        <li
+            v-for="rule in rulesStore.rules"
+            :key="rule.id"
+        >
+          <div>
+            <strong>{{ rule.name }}</strong>
+
+            <span>
+              Prioridad: {{ rule.priority }}
+            </span>
+          </div>
+
+          <span>
+            {{ rule.enabled ? 'Activa' : 'Inactiva' }}
+          </span>
+        </li>
+      </ul>
+    </section>
+
+    <section
+        v-else-if="!rulesStore.loading"
+        class="empty"
+    >
+      <h2>No hay reglas</h2>
 
       <p>
-        La configuración inicial del Side Panel funciona correctamente.
+        Crea la primera regla para verificar el almacenamiento.
       </p>
-
-      <dl class="information">
-        <div>
-          <dt>Versión</dt>
-          <dd>{{ extensionVersion }}</dd>
-        </div>
-
-        <div>
-          <dt>Motor HTTP</dt>
-          <dd>Pendiente</dd>
-        </div>
-
-        <div>
-          <dt>Reglas activas</dt>
-          <dd>0</dd>
-        </div>
-      </dl>
     </section>
   </main>
 </template>
@@ -52,106 +97,115 @@ const extensionVersion = chrome.runtime.getManifest().version;
   box-sizing: border-box;
 }
 
-:global(html) {
-  color-scheme: dark;
-}
-
 :global(body) {
   min-width: 320px;
   margin: 0;
   background: #111827;
   color: #f9fafb;
-  font-family:
-      Inter,
-      ui-sans-serif,
-      system-ui,
-      -apple-system,
-      BlinkMacSystemFont,
-      "Segoe UI",
-      sans-serif;
+  font-family: Inter,
+  system-ui,
+  sans-serif;
 }
 
-.side-panel {
+button {
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 7px;
+  background: #f9fafb;
+  color: #111827;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.page {
   min-height: 100vh;
   padding: 20px;
 }
 
 .header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #374151;
 }
 
 .eyebrow {
   color: #9ca3af;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 h1 {
   margin: 4px 0 0;
-  font-size: 28px;
-  line-height: 1;
+  font-size: 24px;
 }
 
-.subtitle {
-  margin: 6px 0 0;
-  color: #9ca3af;
-}
-
-.status {
-  padding: 5px 9px;
-  border: 1px solid #4b5563;
-  border-radius: 999px;
-  color: #d1d5db;
-  font-size: 12px;
-}
-
-.content {
-  padding-top: 24px;
-}
-
-.content h2 {
-  margin: 0 0 8px;
-  font-size: 18px;
-}
-
-.content > p {
-  margin: 0;
-  color: #9ca3af;
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.information {
+.summary {
   display: grid;
-  gap: 1px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
   margin-top: 24px;
-  overflow: hidden;
+}
+
+.summary article {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
   border: 1px solid #374151;
   border-radius: 8px;
-  background: #374151;
-}
-
-.information div {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px;
   background: #1f2937;
 }
 
-.information dt {
+.summary span {
   color: #9ca3af;
+  font-size: 13px;
 }
 
-.information dd {
-  margin: 0;
-  font-weight: 600;
+.summary strong {
+  font-size: 24px;
+}
+
+.rules {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.rules li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  background: #1f2937;
+}
+
+.rules li div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rules li span {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.empty {
+  margin-top: 24px;
+  padding: 24px;
+  border: 1px dashed #4b5563;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.error {
+  color: #fca5a5;
 }
 </style>
