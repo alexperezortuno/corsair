@@ -130,7 +130,7 @@ export const useRulesStore = defineStore('rules', () => {
         error.value =
             cause instanceof Error
                 ? cause.message
-                : 'Ha ocurrido un error desconocido';
+                : 'An unknown error occurred';
     }
 
     return {
