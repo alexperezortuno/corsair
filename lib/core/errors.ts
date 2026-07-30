@@ -26,7 +26,7 @@ export class DependencyNotFoundError extends ApplicationError {
     constructor(token: unknown) {
         super({
             code: 'CORE_DEPENDENCY_NOT_FOUND',
-            message: `No se encontró la dependencia: ${String(token)}`,
+            message: `Dependency not found: ${String(token)}`,
             metadata: {
                 token: String(token),
             },
@@ -41,7 +41,7 @@ export class DependencyAlreadyRegisteredError
     constructor(token: unknown) {
         super({
             code: 'CORE_DEPENDENCY_ALREADY_REGISTERED',
-            message: `La dependencia ya está registrada: ${String(token)}`,
+            message: `Dependency already registered: ${String(token)}`,
             metadata: {
                 token: String(token),
             },
