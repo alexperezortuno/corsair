@@ -1,8 +1,8 @@
 {
-  "name": "wxt-vue-starter",
-  "description": "manifest.json description",
+  "name": "corsair",
+  "description": "HTTP interceptor browser extension — intercept, inspect, and modify HTTP responses.",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "wxt",
@@ -21,6 +21,7 @@
   "devDependencies": {
     "@types/chrome": "^0.2.2",
     "@wxt-dev/module-vue": "^1.0.3",
+    "chrome-webstore-upload": "^6.0.0",
     "typescript": "^5.9.3",
     "vite": "^8.1.5",
     "vue-tsc": "^3.2.5",
