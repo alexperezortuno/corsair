@@ -156,9 +156,7 @@ If you have any questions regarding this Privacy Policy, please contact:
 
 **Project:** Corsair
 
-**Email:** support@yourdomain.com
-
-**Website:** https://yourdomain.com
+**Website:** https://alexperezortuno.pro
 
 ---
 
@@ -185,7 +183,7 @@ The source code is publicly available and can be reviewed by anyone.
 
 GitHub Repository:
 
-https://github.com/your-username/corsair
+[https://github.com/your-username/corsair](https://github.com/alexperezortuno/corsair)
 
 ---
 
