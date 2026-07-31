@@ -1,0 +1,76 @@
+name: Publish to Stores
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target store'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - chrome
+          - firefox
+
+env:
+  CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+  CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+  CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+  CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+  FIREFOX_ADDON_ID: ${{ secrets.FIREFOX_ADDON_ID }}
+  FIREFOX_API_KEY: ${{ secrets.FIREFOX_API_KEY }}
+  FIREFOX_API_SECRET: ${{ secrets.FIREFOX_API_SECRET }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Chrome extension
+        if: inputs.target == 'all' || inputs.target == 'chrome'
+        run: pnpm build
+
+      - name: Build Firefox extension
+        if: inputs.target == 'all' || inputs.target == 'firefox'
+        run: pnpm build:firefox
+
+      - name: Package Chrome zip
+        if: inputs.target == 'all' || inputs.target == 'chrome'
+        run: pnpm zip
+
+      - name: Package Firefox zip
+        if: inputs.target == 'all' || inputs.target == 'firefox'
+        run: pnpm zip:firefox
+
+      - name: Upload to Chrome Web Store
+        if: inputs.target == 'all' || inputs.target == 'chrome'
+        run: node scripts/publish-chrome.mjs
+        env:
+          CHROME_ZIP_PATH: .output/corsair-0.1.0-chrome.zip
+
+      - name: Upload to Firefox Addons
+        if: inputs.target == 'all' || inputs.target == 'firefox'
+        run: |
+          web-ext sign \
+            --source-dir .output/firefox-mv2 \
+            --api-key "${{ secrets.FIREFOX_API_KEY }}" \
+            --api-secret "${{ secrets.FIREFOX_API_SECRET }}" \
+            --channel listed \
+            --artifacts-dir .output
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.FIREFOX_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.FIREFOX_API_SECRET }}
