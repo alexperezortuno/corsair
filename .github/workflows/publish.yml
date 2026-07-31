@@ -13,16 +13,6 @@ on:
         options:
           - all
           - chrome
-          - firefox
-
-env:
-  CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
-  CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
-  CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
-  CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
-  FIREFOX_ADDON_ID: ${{ secrets.FIREFOX_ADDON_ID }}
-  FIREFOX_API_KEY: ${{ secrets.FIREFOX_API_KEY }}
-  FIREFOX_API_SECRET: ${{ secrets.FIREFOX_API_SECRET }}
 
 jobs:
   publish:
@@ -60,17 +50,4 @@ jobs:
         if: inputs.target == 'all' || inputs.target == 'chrome'
         run: node scripts/publish-chrome.mjs
         env:
-          CHROME_ZIP_PATH: .output/corsair-0.1.0-chrome.zip
-
-      - name: Upload to Firefox Addons
-        if: inputs.target == 'all' || inputs.target == 'firefox'
-        run: |
-          web-ext sign \
-            --source-dir .output/firefox-mv2 \
-            --api-key "${{ secrets.FIREFOX_API_KEY }}" \
-            --api-secret "${{ secrets.FIREFOX_API_SECRET }}" \
-            --channel listed \
-            --artifacts-dir .output
-        env:
-          WEB_EXT_API_KEY: ${{ secrets.FIREFOX_API_KEY }}
-          WEB_EXT_API_SECRET: ${{ secrets.FIREFOX_API_SECRET }}
+          CHROME_ZIP_PATH: .output/corsair-0.1.2-chrome.zip
