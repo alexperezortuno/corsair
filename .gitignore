@@ -22,6 +22,7 @@ stats.html
 stats-*.json
 .wxt
 web-ext.config.ts
+pnpm-lock.yaml
 
 # Editor directories and files
 .vscode/*
@@ -32,5 +33,7 @@ web-ext.config.ts
 *.njsproj
 *.sln
 *.sw?
-AGENTS.md
 graphify-out
+AGENTS.md
+.agents
+skills-lock.json

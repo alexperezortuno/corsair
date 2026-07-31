@@ -37,7 +37,7 @@ eventBus.subscribe(
     RULE_EVENTS.created,
     (event) => {
         logger.debug(
-            'Evento rules.created recibido',
+            'rules.created event received',
             {
                 event,
             },
@@ -49,7 +49,7 @@ eventBus.subscribe(
     RULE_EVENTS.updated,
     (event) => {
         logger.debug(
-            'Evento rules.updated recibido',
+            'rules.updated event received',
             {
                 event,
             },
@@ -61,7 +61,7 @@ eventBus.subscribe(
     INTERCEPTION_EVENTS.completed,
     (event) => {
         logger.debug(
-            'Interceptación completada recibida',
+            'Interception completed event received',
             {
                 event,
             },
@@ -73,7 +73,7 @@ eventBus.subscribe(
     INTERCEPTION_EVENTS.failed,
     (event) => {
         logger.error(
-            'Interceptación fallida recibida',
+            'Interception failed event received',
             undefined,
             {
                 event,
@@ -86,7 +86,7 @@ eventBus.subscribe(
     DEBUGGER_EVENTS.attached,
     (event) => {
         logger.debug(
-            'Debugger attached recibido',
+            'Debugger attached event received',
             {
                 event,
             },
@@ -98,7 +98,7 @@ eventBus.subscribe(
     DEBUGGER_EVENTS.detached,
     (event) => {
         logger.debug(
-            'Debugger detached recibido',
+            'Debugger detached event received',
             {
                 event,
             },

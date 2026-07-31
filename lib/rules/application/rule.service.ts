@@ -60,8 +60,8 @@ export class RuleService {
 
         this.logger.info(
             existingRule
-                ? 'Regla actualizada'
-                : 'Regla creada',
+                ? 'Rule updated'
+                : 'Rule created',
             {
                 ruleId: rule.id,
                 ruleName: rule.name,
@@ -85,7 +85,7 @@ export class RuleService {
             }),
         );
 
-        this.logger.info('Regla eliminada', {
+        this.logger.info('Rule deleted', {
             ruleId: id,
             ruleName: existingRule.name,
         });
@@ -99,7 +99,7 @@ export class RuleService {
 
         if (!rule) {
             throw new RuleValidationError(
-                `No existe la regla ${id}`,
+                `Rule ${id} does not exist`,
                 {
                     ruleId: id,
                 },
@@ -123,8 +123,8 @@ export class RuleService {
 
         this.logger.info(
             enabled
-                ? 'Regla activada'
-                : 'Regla desactivada',
+                ? 'Rule enabled'
+                : 'Rule disabled',
             {
                 ruleId: id,
             },
@@ -136,13 +136,13 @@ export class RuleService {
     ): void {
         if (!rule.name.trim()) {
             throw new RuleValidationError(
-                'El nombre de la regla es obligatorio',
+                'Rule name is required',
             );
         }
 
         if (!Number.isInteger(rule.priority)) {
             throw new RuleValidationError(
-                'La prioridad debe ser un número entero',
+                'Priority must be an integer',
                 {
                     priority: rule.priority,
                 },
@@ -151,7 +151,7 @@ export class RuleService {
 
         if (rule.priority < 0) {
             throw new RuleValidationError(
-                'La prioridad no puede ser negativa',
+                'Priority cannot be negative',
                 {
                     priority: rule.priority,
                 },
@@ -204,7 +204,7 @@ export class RuleService {
             new RegExp(pattern);
         } catch (cause) {
             throw new RuleValidationError(
-                'La expresión regular no es válida',
+                'Regular expression is not valid',
                 {
                     pattern,
                     cause:

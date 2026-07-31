@@ -71,7 +71,7 @@ export class InterceptionPipeline {
             : applicableRules;
 
         this.logger.info(
-            'Pipeline de interceptación ejecutado',
+            'Interception pipeline executed',
             {
                 transactionId: transaction.id,
                 matchingRules: matchedRules.length,

@@ -73,7 +73,7 @@ export default defineBackground(() => {
         NETWORK_EVENTS.requestCaptured,
         (event) => {
             logger.debug(
-                'Evento request capturado',
+                'Request captured event',
                 {
                     event,
                 },
@@ -85,7 +85,7 @@ export default defineBackground(() => {
         NETWORK_EVENTS.responseCaptured,
         (event) => {
             logger.debug(
-                'Evento response capturado',
+                'Response captured event',
                 {
                     event,
                 },
@@ -115,12 +115,12 @@ export default defineBackground(() => {
     );
 
     logger.info(
-        'Background service worker iniciado',
+        'Background service worker started',
     );
 
     chrome.runtime.onInstalled.addListener(() => {
         logger.info(
-            'Extensión instalada o actualizada',
+            'Extension installed or updated',
         );
     });
 
@@ -128,7 +128,7 @@ export default defineBackground(() => {
         async (tab) => {
             if (!tab.id) {
                 logger.warn(
-                    'No se encontró una pestaña válida',
+                    'No valid tab found',
                 );
 
                 return;
@@ -140,7 +140,7 @@ export default defineBackground(() => {
                 });
             } catch (error) {
                 logger.error(
-                    'No fue posible abrir el Side Panel',
+                    'Unable to open side panel',
                     error,
                     {
                         tabId: tab.id,
@@ -176,7 +176,7 @@ export default defineBackground(() => {
         NETWORK_EVENTS.requestCaptured,
         (event) => {
             logger.debug(
-                'Evento request capturado',
+                'Request captured event',
                 {
                     event,
                 },
@@ -188,7 +188,7 @@ export default defineBackground(() => {
         NETWORK_EVENTS.responseCaptured,
         (event) => {
             logger.debug(
-                'Evento response capturado',
+                'Response captured event',
                 {
                     event,
                 },
@@ -209,7 +209,7 @@ async function handleDebuggerMessage(
         const tabId = message.payload.tabId;
 
         logger.debug(
-            'Comando de debugger recibido',
+            'Debugger command received',
             {
                 type: message.type,
                 tabId,
@@ -219,13 +219,28 @@ async function handleDebuggerMessage(
 
         switch (message.type) {
             case DEBUGGER_MESSAGE_TYPES.attach: {
+                logger.info(
+                    'Attaching debugger to tab',
+                    { tabId },
+                );
+
                 const session =
                     await debuggerService.attachToTab(
                         tabId,
                     );
 
+                logger.info(
+                    'Debugger attached, enabling network interception',
+                    { tabId },
+                );
+
                 await networkInterceptorService
                     .enableForTab(tabId);
+
+                logger.info(
+                    'Network interception enabled',
+                    { tabId },
+                );
 
                 const data: DebuggerAttachResult = {
                     session,
@@ -270,14 +285,14 @@ async function handleDebuggerMessage(
     } catch (cause) {
         const error = normalizeError(cause);
 
-        logger.error(
-            'Falló el comando de debugger',
-            error,
-            {
-                messageType: message.type,
-                tabId: message.payload.tabId,
-            },
-        );
+            logger.error(
+                'Debugger command failed',
+                error,
+                {
+                    messageType: message.type,
+                    tabId: message.payload.tabId,
+                },
+            );
 
         const failure: RuntimeFailure = {
             success: false,

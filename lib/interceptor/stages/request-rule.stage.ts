@@ -52,7 +52,7 @@ export class RequestRuleStage
             };
         }
 
-        logger.debug('Modificación de request aplicada', {
+        logger.debug('Request modification applied', {
             ruleId: rule.id,
             stage: this.name,
             block: result.block,

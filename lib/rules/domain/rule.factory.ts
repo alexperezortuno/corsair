@@ -13,7 +13,7 @@ export function createDefaultRule(): InterceptionRule {
 
     return {
         id: crypto.randomUUID(),
-        name: 'Nueva regla',
+        name: 'New rule',
         description: '',
 
         enabled: true,

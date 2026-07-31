@@ -8,6 +8,19 @@ import {NETWORK_EVENTS,} from '../domain/network.events';
 
 import type {Logger,} from '@/lib/core/logger';
 
+import type {
+    InterceptionService,
+} from '@/lib/interceptor/application/interception.service';
+
+import type {
+    InterceptionTransaction,
+    ResponseDecision,
+} from '@/lib/interceptor/domain/interception.types';
+
+import type {
+    ResourceType,
+} from '@/lib/rules/domain/rule.types';
+
 import type {NetworkGateway,} from '../domain/network.gateway';
 
 import type {CapturedNetworkExchange,} from '../domain/network.types';
@@ -22,6 +35,10 @@ export class NetworkInterceptorService {
     constructor(
         private readonly gateway:
         NetworkGateway,
+
+        private readonly interceptionService:
+        InterceptionService,
+
         private readonly eventBus:
         EventBus,
         private readonly logger:
@@ -69,7 +86,7 @@ export class NetworkInterceptorService {
         );
 
         this.logger.info(
-            'Interceptación de red habilitada',
+            'Network interception enabled',
             {
                 tabId,
             },
@@ -99,7 +116,7 @@ export class NetworkInterceptorService {
         );
 
         this.logger.info(
-            'Interceptación de red deshabilitada',
+            'Network interception disabled',
             {
                 tabId,
             },
@@ -125,7 +142,7 @@ export class NetworkInterceptorService {
         this.enabledTabs.delete(tabId);
 
         this.logger.debug(
-            'Estado local de red eliminado',
+            'Local network state cleared',
             {
                 tabId,
             },
@@ -139,6 +156,8 @@ export class NetworkInterceptorService {
     ): Promise<void> {
         let exchange:
             CapturedNetworkExchange | null = null;
+
+        let pausedRequestHandled = false;
 
         try {
             exchange =
@@ -155,6 +174,11 @@ export class NetworkInterceptorService {
             }
 
             await this.publishCapture(exchange);
+
+            pausedRequestHandled =
+                await this.applyRulesToResponse(
+                    exchange,
+                );
         } catch (cause) {
             const error =
                 normalizeError(cause);
@@ -177,7 +201,7 @@ export class NetworkInterceptorService {
             );
 
             this.logger.error(
-                'No fue posible procesar el evento de red',
+                'Unable to process network event',
                 error,
                 {
                     method: event.method,
@@ -185,11 +209,163 @@ export class NetworkInterceptorService {
                 },
             );
         } finally {
-            await this.continueIfPaused(
-                event,
-                exchange?.interceptionId,
-            );
+            if (!pausedRequestHandled) {
+                await this.continueIfPaused(
+                    event,
+                    exchange?.interceptionId,
+                );
+            }
         }
+    }
+
+    private async applyRulesToResponse(
+        exchange: CapturedNetworkExchange,
+    ): Promise<boolean> {
+        if (exchange.stage !== 'response') {
+            return false;
+        }
+
+        const responseBody =
+            await this.gateway.readResponseBody(
+                exchange.tabId,
+                exchange.interceptionId,
+            );
+
+        const transaction =
+            this.createTransaction(
+                exchange,
+                responseBody.body,
+            );
+
+        const result =
+            await this.interceptionService.intercept(
+                transaction,
+            );
+
+        if (!result.response) {
+            return false;
+        }
+
+        if (result.response.delayMs > 0) {
+            await wait(result.response.delayMs);
+        }
+
+        if (result.response.abort) {
+            await this.gateway.failPausedRequest(
+                exchange.tabId,
+                exchange.interceptionId,
+            );
+
+            this.logger.info(
+                'Response aborted by rule',
+                {
+                    tabId: exchange.tabId,
+                    url: exchange.url,
+                    matchedRules:
+                        result.matchedRules.length,
+                },
+            );
+
+            broadcastNetworkLog({
+                type: 'responseAborted',
+                url: exchange.url,
+                statusCode: exchange.statusCode,
+                matchedRules: result.matchedRules.length,
+            });
+
+            return true;
+        }
+
+        if (
+            !hasMeaningfulResponseChange(
+                exchange,
+                responseBody.body,
+                result.response,
+            )
+        ) {
+            return false;
+        }
+
+        const decision =
+            toFulfillDecision(
+                exchange,
+                responseBody.body,
+                result.response,
+            );
+
+        await this.gateway.fulfillPausedResponse(
+            exchange.tabId,
+            exchange.interceptionId,
+            decision,
+        );
+
+        this.logger.info(
+            'Response modified by rule',
+            {
+                tabId: exchange.tabId,
+                url: exchange.url,
+                statusCode:
+                    decision.statusCode,
+                matchedRules:
+                    result.matchedRules.length,
+            },
+        );
+
+        broadcastNetworkLog({
+            type: 'responseModified',
+            url: exchange.url,
+            statusCode: decision.statusCode,
+            matchedRules: result.matchedRules.length,
+        });
+
+        return true;
+    }
+
+    private createTransaction(
+        exchange: Extract<
+            CapturedNetworkExchange,
+            {
+                stage: 'response';
+            }
+        >,
+        responseBody?: string,
+    ): InterceptionTransaction {
+        const now = new Date().toISOString();
+
+        return {
+            id: exchange.networkId ?? exchange.interceptionId,
+
+            request: {
+                id: exchange.networkId ?? exchange.interceptionId,
+                tabId: exchange.tabId,
+                url: exchange.url,
+                method: exchange.method,
+                resourceType:
+                    toResourceType(
+                        exchange.resourceType,
+                    ),
+                headers: {
+                    ...exchange.requestHeaders,
+                },
+                timestamp: now,
+            },
+
+            response: {
+                requestId:
+                    exchange.networkId ?? exchange.interceptionId,
+                url: exchange.url,
+                statusCode: exchange.statusCode,
+                statusText: exchange.statusText,
+                headers: {
+                    ...exchange.responseHeaders,
+                },
+                body: responseBody,
+                timestamp: now,
+            },
+
+            matchedRuleIds: [],
+            startedAt: now,
+        };
     }
 
     private async publishCapture(
@@ -206,7 +382,7 @@ export class NetworkInterceptorService {
             );
 
             this.logger.debug(
-                'Request capturado',
+                'Request captured',
                 {
                     tabId: exchange.tabId,
                     method: exchange.method,
@@ -229,7 +405,7 @@ export class NetworkInterceptorService {
         );
 
         this.logger.debug(
-            'Response capturado',
+            'Response captured',
             {
                 tabId: exchange.tabId,
                 method: exchange.method,
@@ -266,7 +442,7 @@ export class NetworkInterceptorService {
 
         if (!interceptionId) {
             this.logger.error(
-                'No se pudo continuar una solicitud pausada',
+                'Unable to continue paused request',
                 undefined,
                 {
                     tabId: event.target.tabId,
@@ -284,7 +460,7 @@ export class NetworkInterceptorService {
                 );
         } catch (cause) {
             this.logger.error(
-                'No fue posible continuar el request',
+                'Unable to continue request',
                 cause,
                 {
                     tabId: event.target.tabId,
@@ -327,4 +503,156 @@ function shouldIgnoreUrl(
         url.startsWith('data:') ||
         url.startsWith('blob:')
     );
+}
+
+function wait(
+    delayMs: number,
+): Promise<void> {
+    return new Promise((resolve) => {
+        setTimeout(resolve, delayMs);
+    });
+}
+
+function toResourceType(
+    value?: string,
+): ResourceType | undefined {
+    if (!value) {
+        return undefined;
+    }
+
+    const normalizedValue =
+        value.toLowerCase();
+
+    const map: Record<string, ResourceType> = {
+        document: 'Document',
+        stylesheet: 'Stylesheet',
+        image: 'Image',
+        media: 'Media',
+        font: 'Font',
+        script: 'Script',
+        xhr: 'XHR',
+        fetch: 'Fetch',
+        websocket: 'WebSocket',
+        other: 'Other',
+    };
+
+    return map[normalizedValue] ?? 'Other';
+}
+
+function hasMeaningfulResponseChange(
+    exchange: Extract<
+        CapturedNetworkExchange,
+        {
+            stage: 'response';
+        }
+    >,
+    currentBody: string | undefined,
+    response: ResponseDecision,
+): boolean {
+    if (response.statusCode !== exchange.statusCode) {
+        return true;
+    }
+
+    if ((response.statusText ?? '') !== (exchange.statusText ?? '')) {
+        return true;
+    }
+
+    if (
+        normalizeHeaders(response.headers) !==
+        normalizeHeaders(exchange.responseHeaders)
+    ) {
+        return true;
+    }
+
+    return (response.body ?? '') !== (currentBody ?? '');
+}
+
+function normalizeHeaders(
+    headers: Record<string, string>,
+): string {
+    return Object.entries(headers)
+        .map(([name, value]) => [
+            name.toLowerCase(),
+            value,
+        ] as const)
+        .sort((a, b) =>
+            a[0].localeCompare(b[0]),
+        )
+        .map(([name, value]) => `${name}:${value}`)
+        .join('|');
+}
+
+function toFulfillDecision(
+    exchange: Extract<
+        CapturedNetworkExchange,
+        {
+            stage: 'response';
+        }
+    >,
+    currentBody: string | undefined,
+    response: ResponseDecision,
+): {
+    statusCode: number;
+    statusText?: string;
+    headers: Record<string, string>;
+    body?: string;
+} {
+    const body = response.body ?? currentBody;
+    const bodyChanged = body !== currentBody;
+
+    const headers = {
+        ...response.headers,
+    };
+
+    if (bodyChanged) {
+        removeHeaderByName(
+            headers,
+            'content-length',
+        );
+
+        removeHeaderByName(
+            headers,
+            'content-encoding',
+        );
+    }
+
+    return {
+        statusCode: response.statusCode,
+        statusText:
+            response.statusText ?? exchange.statusText,
+        headers,
+        body,
+    };
+}
+
+function removeHeaderByName(
+    headers: Record<string, string>,
+    name: string,
+): void {
+    const match = Object.keys(headers).find(
+        (candidate) =>
+            candidate.toLowerCase() === name,
+    );
+
+    if (match) {
+        delete headers[match];
+    }
+}
+
+function broadcastNetworkLog(
+    payload: {
+        type: string;
+        url: string;
+        statusCode: number;
+        matchedRules: number;
+    },
+): void {
+    try {
+        void chrome.runtime.sendMessage({
+            type: 'network.log',
+            payload,
+        });
+    } catch {
+        // Sidepanel may not be open; ignore.
+    }
 }
