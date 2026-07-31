@@ -34,3 +34,6 @@ pnpm-lock.yaml
 *.sln
 *.sw?
 graphify-out
+AGENTS.md
+.agents
+skills-lock.json
