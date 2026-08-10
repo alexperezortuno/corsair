@@ -515,9 +515,9 @@ function resetForm(): void {
 }
 
 function parseStatusCode(
-    value: string,
+    value: string | number,
 ): number | undefined {
-  const normalizedValue = value.trim();
+  const normalizedValue = String(value).trim();
 
   if (!normalizedValue) {
     return undefined;
