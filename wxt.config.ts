@@ -7,7 +7,7 @@ export default defineConfig({
         name: 'Corsair HTTP Interceptor',
         description:
             'Intercept, inspect, and modify HTTP requests and responses.',
-        version: '0.1.2',
+        version: '0.1.4',
 
         minimum_chrome_version: '116',
 
